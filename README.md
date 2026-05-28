@@ -1,116 +1,112 @@
-ARGUS is powered by a combination of AI orchestration frameworks and production-grade web intelligence infrastructure designed for real-time cybersecurity investigations.
+# ARGUS Backend Intelligence System
 
-### 🌐 Bright Data MCP Server
+ARGUS is an autonomous cyber intelligence backend for the Bright Data Web Data UNLOCKED Hackathon, Track 3: Security & Compliance. It exposes a FastAPI API and WebSocket stream that scan a company domain for actionable risk intelligence.
 
-The Bright Data MCP Server gives ARGUS live web access capabilities through AI-compatible tooling.
+## Current Repository Structure
 
-ARGUS uses MCP to:
+```text
+ARGUS/
+  backend/
+    app/
+      clients/        Bright Data, Ollama clients
+      collectors/     Leak scanner, domain monitor, attack simulator
+      core/           Environment-backed settings
+      services/       LangGraph reasoning, memory, alerts, agent orchestration
+      utils/          Domain validation and typosquatting helpers
+      main.py         FastAPI application and WebSocket endpoint
+  frontend/
+    index.html        Existing ARGUS demo UI, connects to ws://localhost:8000/ws/{domain}
+  .env.example        Backend configuration template
+  requirements.txt    Python dependencies
+  setup.sh            Local setup helper
+  LICENSE             MIT License
+```
 
-* Connect AI agents directly to the web
-* Execute live investigations autonomously
-* Access structured web intelligence tools
-* Enable real-time reasoning over live data
+## Implementation Plan
 
-This serves as the core communication layer between the ARGUS AI agent and Bright Data services.
+1. FastAPI backend with `/health`, `/scan`, and `/ws/{company_domain}`.
+2. Bright Data intelligence layer using Bright Data MCP with Web Unlocker enabled by appending `unlock=1`, plus capped SERP API collectors.
+3. LangGraph orchestration around an Ollama reasoning node using `chevalblanc/gpt-4o-mini`.
+4. Persistent threat memory through Cognee, with local JSONL fallback for demos without Cognee credentials.
+5. TriggerWare.ai webhook alerts for `CRITICAL` and `HIGH` findings.
+6. MIT-licensed, environment-configured structure suitable for production hardening.
 
----
+## Hackathon Compliance
 
-### 🔓 Bright Data Web Unlocker API
+- Bright Data MCP: `backend/app/clients/bright_data.py` calls the configured MCP endpoint.
+- Web Unlocker: `Settings.bright_data_mcp_unlocker_url` appends `unlock=1`.
+- SERP API: collectors call `BrightDataClient.serp_search`.
+- Track 3 Security & Compliance: collectors produce actionable leak, typosquatting, subdomain, cloud bucket, and exposed admin-surface findings.
+- Ollama: `backend/app/clients/ollama_client.py` uses `model="chevalblanc/gpt-4o-mini"`.
+- LangGraph: `backend/app/services/reasoning.py` builds a `StateGraph` for risk classification.
+- Cognee: `backend/app/services/memory.py` stores structured findings after every scan when available.
+- TriggerWare.ai: `backend/app/services/alerts.py` sends webhook alerts for high-impact threats.
+- License: MIT License is included in `LICENSE`.
 
-Modern websites use anti-bot systems, CAPTCHAs, geo-restrictions, and fingerprinting protections that block traditional scrapers.
+## Setup
 
-ARGUS uses Web Unlocker to:
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+cp .env.example backend/.env
+```
 
-* Bypass bot detection systems
-* Access protected websites
-* Navigate geo-blocked pages
-* Collect threat intelligence from difficult targets
+Install and start Ollama, then pull the requested model:
 
-This enables reliable threat monitoring at enterprise scale.
+```bash
+ollama pull chevalblanc/gpt-4o-mini
+```
 
----
+Edit `backend/.env` with Bright Data, Cognee, and TriggerWare.ai values.
 
-### 🔎 Bright Data SERP API
+## Run
 
-ARGUS uses the SERP API to gather live search intelligence from public search engines.
+```bash
+uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-Use cases include:
+Open `frontend/index.html` in a browser and start a scan. The frontend connects to:
 
-* Detecting leaked credentials
-* Discovering exposed files
-* Monitoring phishing infrastructure
-* Identifying suspicious indexed pages
-* Detecting typosquatted domains
+```text
+ws://localhost:8000/ws/{company_domain}
+```
 
-SERP intelligence acts as ARGUS’s first layer of internet-wide threat discovery.
+## API
 
-### 🌍 Bright Data Scraping Browser
+### Health
 
-Many modern websites are heavily dependent on JavaScript rendering and dynamic content loading.
+```bash
+curl http://localhost:8000/health
+```
 
-ARGUS uses Scraping Browser to:
+### REST Scan
 
-* Render JavaScript-heavy websites
-* Interact with dynamic pages
-* Analyze live front-end content
-* Extract intelligence from interactive web applications
+```bash
+curl -X POST http://localhost:8000/scan \
+  -H 'Content-Type: application/json' \
+  -d '{"company_domain":"example.com","focus":"full"}'
+```
 
-This allows ARGUS to investigate targets that traditional crawlers cannot access reliably.
+### WebSocket Scan
 
-### 🧠 OpenAI API (GPT-4o mini)
+Connect to `/ws/{company_domain}`. The server streams:
 
-ARGUS uses GPT-4o mini as its AI reasoning engine.
+```json
+{"type":"finding","data":{"severity":"HIGH","risk_score":80}}
+{"type":"complete","data":{"score":80,"finding_count":5}}
+```
 
-The model is responsible for:
+## Environment
 
-* Threat classification
-* Risk scoring
-* Security analysis
-* Investigation summarization
-* Autonomous decision-making
-* Correlating findings across multiple intelligence sources
+Key variables are documented in `.env.example`.
 
-Rather than simply scraping data, ARGUS reasons over findings like an AI cyber analyst.
+- `BRIGHT_DATA_API_TOKEN`
+- `BRIGHT_DATA_SERP_ZONE`
+- `BRIGHT_DATA_MCP_URL`
+- `OLLAMA_HOST`
+- `COGNEE_ENABLED`
+- `TRIGGERWARE_WEBHOOK_URL`
 
-### 🔄 LangGraph + LangChain
-
-ARGUS uses LangGraph and LangChain to orchestrate autonomous AI workflows.
-
-This enables:
-
-* Multi-step investigations
-* Tool calling
-* Stateful AI agents
-* Agent memory integration
-* Real-time streaming workflows
-
-The architecture allows ARGUS to behave like an autonomous cyber intelligence system instead of a static chatbot.
-
-
-### 🧵 Cognee Memory Layer
-
-Cognee provides persistent memory capabilities for ARGUS.
-
-ARGUS stores:
-
-* Previous investigations
-* Historical threat findings
-* Repeated attack patterns
-* Organization-specific threat context
-
-This allows the agent to improve investigations over time through contextual memory retrieval.
-
-
-### 🚨 TriggerWare.ai Automation
-
-TriggerWare.ai enables automated security workflows and alerting.
-
-ARGUS uses TriggerWare to:
-
-* Trigger alerts for HIGH/CRITICAL threats
-* Dispatch automated workflows
-* Notify security teams in real time
-* Escalate incidents automatically
-
-This transforms ARGUS from a monitoring tool into an active cyber operations assistant.
-
+When Bright Data credentials are not configured, ARGUS returns deterministic demo findings so the API and frontend remain testable.
