@@ -1,5 +1,7 @@
 """Bright Data MCP, Web Unlocker, and SERP API client helpers."""
 
+import json
+import re
 from typing import Any, Dict, List
 
 import httpx
@@ -30,25 +32,29 @@ class BrightDataClient:
     async def mcp_tool_call(
         self, tool_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Call a Bright Data MCP JSON-RPC tool through the configured unlocker zone."""
+        """Call a Bright Data MCP tool through the Streamable HTTP transport."""
 
         await self.rate_limiter.acquire()
-        payload = {
-            "jsonrpc": "2.0",
-            "id": tool_name,
-            "method": "tools/call",
-            "params": {"name": tool_name, "arguments": arguments},
-        }
-        async with httpx.AsyncClient(
-            timeout=self.settings.request_timeout_seconds
-        ) as client:
-            response = await client.post(
-                self.settings.bright_data_mcp_unlocker_url,
-                headers=self.headers,
-                json=payload,
+        from langchain_mcp_adapters.client import MultiServerMCPClient
+
+        client = MultiServerMCPClient(
+            {
+                "bright_data": {
+                    "url": self.settings.bright_data_mcp_unlocker_url,
+                    "transport": "streamable_http",
+                }
+            }
+        )
+        tools = await client.get_tools()
+        tools_by_name = {tool.name: tool for tool in tools}
+        tool = tools_by_name.get(tool_name)
+        if tool is None:
+            raise RuntimeError(
+                f"Bright Data MCP tool '{tool_name}' unavailable; "
+                f"available tools: {', '.join(sorted(tools_by_name))}"
             )
-            response.raise_for_status()
-            return response.json()
+        result = await tool.ainvoke(arguments)
+        return {"result": {"content": result}}
 
     async def web_search(self, query: str, limit: int) -> List[Dict[str, Any]]:
         """Search using Bright Data MCP first, then Bright Data SERP API.
@@ -78,7 +84,9 @@ class BrightDataClient:
                 self.last_mcp_error = str(exc)
                 self.mcp_disabled_for_scan = True
 
-        if not results:
+        if not results and (
+            self.settings.bright_data_serp_zone or not self.settings.bright_data_api_token
+        ):
             results = await self.serp_search(query, limit)
 
         self.cache.set(cache_key, results)
@@ -91,7 +99,7 @@ class BrightDataClient:
             not self.settings.bright_data_api_token
             or not self.settings.bright_data_serp_zone
         ):
-            if self.settings.enable_mock_data:
+            if self.settings.enable_mock_data and not self.settings.bright_data_api_token:
                 return self._mock_serp(query, limit)
             return []
 
@@ -166,6 +174,8 @@ class BrightDataClient:
             )
         elif isinstance(content, list):
             candidates = content
+        elif isinstance(content, str):
+            candidates = self._parse_text_results(content, query)
         else:
             candidates = []
 
@@ -196,6 +206,44 @@ class BrightDataClient:
                     }
                 )
         return normalized
+
+    def _parse_text_results(self, content: str, query: str) -> List[Dict[str, Any]]:
+        try:
+            parsed = json.loads(content)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict):
+            candidates = (
+                parsed.get("organic")
+                or parsed.get("results")
+                or parsed.get("items")
+                or []
+            )
+            if isinstance(candidates, list):
+                return candidates
+        if isinstance(parsed, list):
+            return parsed
+
+        results: List[Dict[str, Any]] = []
+        blocks = re.split(r"\n(?=#{1,6}\s+|\d+\.\s+)", content)
+        for block in blocks:
+            text = block.strip()
+            if not text:
+                continue
+            title_match = re.match(r"(?:#{1,6}\s+|\d+\.\s+)?(.+)", text)
+            url_match = re.search(r"https?://[^\s)>\]]+", text)
+            snippet = re.sub(r"#{1,6}\s+", "", text)
+            results.append(
+                {
+                    "title": title_match.group(1).strip()[:120]
+                    if title_match
+                    else query,
+                    "url": url_match.group(0) if url_match else None,
+                    "snippet": snippet[:500],
+                    "query": query,
+                }
+            )
+        return results
 
     def _mock_serp(self, query: str, limit: int) -> List[Dict[str, Any]]:
         """Return deterministic demo data when live Bright Data credentials are absent."""

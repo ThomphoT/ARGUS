@@ -840,6 +840,56 @@
       background: linear-gradient(180deg, var(--severity-low), transparent);
       opacity: 0.15;
     }
+    .finding-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .finding-action-btn {
+      border: 1px solid var(--border-cyan);
+      border-radius: 4px;
+      background: rgba(0, 212, 255, 0.06);
+      color: var(--accent-cyan);
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .finding-action-btn.danger {
+      border-color: rgba(255, 59, 48, 0.45);
+      background: rgba(255, 59, 48, 0.08);
+      color: var(--severity-critical);
+    }
+    .finding-detail {
+      display: none;
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--border-metallic);
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.24);
+      font-size: 11px;
+      line-height: 1.55;
+      color: var(--text-secondary);
+    }
+    .finding-detail.open {
+      display: block;
+    }
+    .finding-detail a {
+      color: var(--accent-cyan);
+      word-break: break-all;
+    }
+    .finding-detail pre {
+      margin: 8px 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+    }
 
     .status-pill {
       display: inline-flex;
@@ -1601,10 +1651,40 @@
       threatLabel.textContent = label;
     }
 
+    function evidenceSummary(data) {
+      const evidence = data.evidence || {};
+      const lines = [];
+      if (data.reasoning) lines.push('<strong>Reasoning:</strong> ' + escapeHtml(data.reasoning));
+      if (evidence.query) lines.push('<strong>Live query:</strong> ' + escapeHtml(evidence.query));
+      if (evidence.variant) lines.push('<strong>Variant:</strong> ' + escapeHtml(evidence.variant));
+      if (data.url) lines.push('<strong>Source URL:</strong> <a href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(data.url) + '</a>');
+      if (data.recommendations && data.recommendations.length) {
+        lines.push('<strong>Recommendations:</strong> ' + data.recommendations.map(escapeHtml).join('; '));
+      }
+      if (evidence.serp_result) {
+        lines.push('<strong>Raw result:</strong><pre>' + escapeHtml(JSON.stringify(evidence.serp_result, null, 2)) + '</pre>');
+      }
+      return lines.length ? lines.join('<br>') : 'No additional evidence was returned for this finding.';
+    }
+
+    function defenseResponse(data) {
+      const severity = (data.severity || 'LOW').toUpperCase();
+      const score = data.risk_score != null ? data.risk_score : 0;
+      return [
+        '<strong>Containment response:</strong> Halt suspicious sessions, revoke active tokens, rotate exposed credentials, and block the source infrastructure tied to this finding.',
+        '<strong>Preservation boundary:</strong> If an attacker already extracted 40% of the exposed data, ARGUS cannot retrieve that data. The response objective is to preserve and secure the remaining 60%.',
+        '<strong>Priority:</strong> ' + escapeHtml(severity) + ' / score ' + escapeHtml(String(score)) + '.',
+        '<strong>Next action:</strong> Isolate affected services, enable audit logging, snapshot evidence, and verify no further outbound transfer is occurring.'
+      ].join('<br>');
+    }
+
     function renderFinding(data) {
       const card = document.createElement('div');
       card.className = 'finding-card ' + getSeverityClass(data.severity);
       card.style.padding = '14px 16px';
+      const findingIndex = state.findings.length;
+      const detailId = 'finding-detail-' + findingIndex;
+      const responseId = 'finding-response-' + findingIndex;
 
       const type = data.type || 'info';
       const title = data.title || data.finding || 'Unknown finding';
@@ -1622,10 +1702,23 @@
             <div style="font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:2px;">` + escapeHtml(title) + `</div>
             ` + (data.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">` + escapeHtml(data.description) + `</div>` : '') + `
             ` + (source ? `<div style="font-size:10px;color:var(--text-secondary);opacity:0.6;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">` + escapeHtml(source) + `</div>` : '') + `
+            <div class="finding-actions">
+              <button class="finding-action-btn" type="button" data-target="` + detailId + `">Read more</button>
+              <button class="finding-action-btn danger" type="button" data-target="` + responseId + `">Halt exfiltration</button>
+            </div>
+            <div class="finding-detail" id="` + detailId + `">` + evidenceSummary(data) + `</div>
+            <div class="finding-detail" id="` + responseId + `">` + defenseResponse(data) + `</div>
           </div>
           <div style="font-size:10px;color:var(--text-secondary);opacity:0.5;font-family:var(--font-mono);white-space:nowrap;flex-shrink:0;">` + new Date(ts).toLocaleTimeString() + `</div>
         </div>
       `;
+      card.querySelectorAll('.finding-action-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const target = card.querySelector('#' + btn.getAttribute('data-target'));
+          if (!target) return;
+          target.classList.toggle('open');
+        });
+      });
       feedArea.insertBefore(card, feedArea.firstChild);
       state.findings.push(data);
       findingCount.textContent = '[' + state.findings.length + ' findings]';
@@ -1652,6 +1745,11 @@
         threatRecs.innerHTML = recs.map(r => '<div>&#x2022; ' + escapeHtml(r) + '</div>').join('');
       } else {
         threatRecs.innerHTML = '<div>&#x2022; Scan complete. No recommendations provided.</div>';
+      }
+      if (data && data.live_status && data.finding_count === 0) {
+        const status = data.live_status;
+        const detail = status.mcp_last_error || status.serp_last_error || 'Live collectors completed without returning public findings.';
+        threatRecs.innerHTML += '<div style="margin-top:8px;color:var(--text-secondary);font-size:11px;">Live data status: ' + escapeHtml(detail) + '</div>';
       }
     }
 

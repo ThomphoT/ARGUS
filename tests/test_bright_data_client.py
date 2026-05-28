@@ -35,7 +35,7 @@ async def test_web_search_prefers_mcp_results(test_settings):
 
 
 @pytest.mark.asyncio
-async def test_web_search_falls_back_to_serp_after_mcp_failure(test_settings):
+async def test_web_search_does_not_mock_when_live_credentials_fail(test_settings):
     settings = test_settings.model_copy(
         update={"bright_data_api_token": "token", "bright_data_serp_zone": ""}
     )
@@ -52,10 +52,32 @@ async def test_web_search_falls_back_to_serp_after_mcp_failure(test_settings):
     first = await client.web_search("example", 1)
     second = await client.web_search("different", 1)
 
-    assert first[0]["via"] == "mock_serp"
-    assert second[0]["via"] == "mock_serp"
+    assert first == []
+    assert second == []
     assert client.mcp_disabled_for_scan is True
     assert mcp_calls == 1
+
+
+def test_mcp_text_results_are_normalized(test_settings):
+    client = BrightDataClient(test_settings)
+
+    results = client._normalize_mcp_results(
+        {
+            "result": {
+                "content": (
+                    "# Supabase Docs\n"
+                    "https://supabase.com/docs\n"
+                    "Open source Firebase alternative documentation."
+                )
+            }
+        },
+        "supabase",
+        1,
+    )
+
+    assert results[0]["title"] == "Supabase Docs"
+    assert results[0]["url"] == "https://supabase.com/docs"
+    assert results[0]["via"] == "Bright Data MCP Web Unlocker"
 
 
 def test_mcp_url_uses_configured_unlocker_zone(test_settings):

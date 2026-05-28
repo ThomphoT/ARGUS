@@ -66,13 +66,26 @@ class ArgusAgent:
                 )
 
         summary = self.summarize(company_domain, classified_findings)
+        summary_data = summary.model_dump(mode="json")
+        summary_data["live_status"] = self.bright_data.status()
+        if not classified_findings:
+            if self.bright_data.last_mcp_error or self.bright_data.last_serp_error:
+                summary_data["recommendations"] = [
+                    "Live collection returned no findings. Verify Bright Data MCP connectivity and zone configuration.",
+                    "No mock findings were used because live Bright Data credentials are configured.",
+                ]
+            else:
+                summary_data["recommendations"] = [
+                    "No public exposure signals were found by the selected collectors.",
+                    "Run a full scan or enable attack mode for broader reconnaissance.",
+                ]
         logger.info(
             "Scan summary for domain=%s: score=%d, findings=%d",
             company_domain,
             summary.score,
             summary.finding_count,
         )
-        yield {"type": "complete", "data": summary.model_dump(mode="json")}
+        yield {"type": "complete", "data": summary_data}
 
     def _select_collectors(self, focus: str, attack_mode: bool):
         focus = (focus or "full").lower()
