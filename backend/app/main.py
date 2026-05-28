@@ -1,5 +1,6 @@
 """FastAPI entry point for the ARGUS backend intelligence system."""
 
+import asyncio
 import logging
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -68,14 +69,26 @@ async def scan(request: ScanRequest) -> dict:
 @app.websocket("/ws/{company_domain}")
 async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
     await websocket.accept()
+    scan_completed = False
     try:
         domain = normalize_domain(company_domain)
         focus = "full"
         attack_mode = False
         try:
-            payload = await websocket.receive_json()
+            payload = await asyncio.wait_for(websocket.receive_json(), timeout=2.0)
             focus = payload.get("focus", focus)
             attack_mode = bool(payload.get("attack_mode", attack_mode))
+        except asyncio.TimeoutError:
+            logger.info(
+                "No WebSocket scan options received for domain=%s; using defaults",
+                domain,
+            )
+        except WebSocketDisconnect:
+            logger.info(
+                "Client disconnected before scan options were received for domain=%s",
+                domain,
+            )
+            return
         except Exception:
             pass
 
@@ -90,9 +103,19 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
         async for event in agent.stream_scan(domain, focus, attack_mode):
             await websocket.send_json(event)
             event_count += 1
+            if event.get("type") == "complete":
+                scan_completed = True
         logger.info("Scan complete for domain=%s, events=%d", domain, event_count)
     except WebSocketDisconnect:
-        logger.warning("Client disconnected during scan for domain=%s", company_domain)
+        if scan_completed:
+            logger.info(
+                "Client closed WebSocket after scan completed for domain=%s",
+                company_domain,
+            )
+        else:
+            logger.warning(
+                "Client disconnected during scan for domain=%s", company_domain
+            )
         return
     except Exception as exc:
         logger.error(

@@ -58,10 +58,11 @@ class Settings(BaseSettings):
     def bright_data_mcp_unlocker_url(self) -> str:
         """Return Bright Data MCP URL with Web Unlocker enabled via unlock=1."""
 
-        separator = "&" if "?" in self.bright_data_mcp_url else "?"
-        if "unlock=1" in self.bright_data_mcp_url:
-            return self.bright_data_mcp_url
-        return f"{self.bright_data_mcp_url}{separator}unlock=1"
+        mcp_url = self.bright_data_mcp_url.strip().strip("\"'")
+        separator = "&" if "?" in mcp_url else "?"
+        if "unlock=1" in mcp_url:
+            return mcp_url
+        return f"{mcp_url}{separator}unlock=1"
 
 
 @lru_cache

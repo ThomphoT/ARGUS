@@ -446,6 +446,7 @@
         state.ws.close();
       }
       const url = 'ws://localhost:8000/ws/' + encodeURIComponent(company);
+      let scanCompleted = false;
       state.ws = new WebSocket(url);
 
       state.ws.onopen = function() {
@@ -461,9 +462,11 @@
           if (data.type === 'finding') {
             renderFinding(data.data || data);
           } else if (data.type === 'complete') {
+            scanCompleted = true;
             renderComplete(data.data || data);
           } else if (data.type === 'error') {
             showToast('Scan error: ' + (data.data && data.data.message ? data.data.message : 'Unknown'));
+            resetToIdle();
           }
         } catch(e) {
           console.warn('WS parse error:', e);
@@ -475,8 +478,8 @@
         resetToIdle();
       };
 
-      state.ws.onclose = function() {
-        if (state.scanState === 'scanning') {
+      state.ws.onclose = function(event) {
+        if (!scanCompleted && state.scanState === 'scanning') {
           showToast('Connection lost. Backend may be down.');
           resetToIdle();
         }
