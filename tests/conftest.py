@@ -11,8 +11,10 @@ from backend.app.main import app
 @pytest.fixture
 def test_settings(tmp_path) -> Settings:
     return Settings(
+        bright_data_mcp_url="https://mcp.brightdata.com/mcp",
         bright_data_api_token="",
         bright_data_serp_zone="",
+        bright_data_web_unlocker_zone="mcp_unlocker",
         enable_mock_data=True,
         max_serp_queries=1,
         max_results_per_query=1,
