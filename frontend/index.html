@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARGUS — Autonomous Reconnaissance & Guardian Unified System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg-base: #080A0F;
+      --panel-surface: #0D1117;
+      --panel-glass: rgba(192, 192, 192, 0.06);
+      --text-primary: #E8EAF0;
+      --text-secondary: #8A94A8;
+      --accent-cyan: #00D4FF;
+      --accent-cyan-dim: #0099BB;
+      --accent-metallic: rgba(220, 225, 235, 0.15);
+      --severity-critical: #FF3B30;
+      --severity-high: #FF9500;
+      --severity-medium: #FFD60A;
+      --severity-low: #30D158;
+      --border-cyan: rgba(0, 212, 255, 0.15);
+      --border-metallic: rgba(220, 225, 235, 0.12);
+      --panel-radius: 8px;
+      --font-display: 'Rajdhani', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+      --shadow-glow: 0 0 40px rgba(0, 212, 255, 0.04);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.25); border-radius: 2px; }
+
+    #bg-grid {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(0, 212, 255, 0.04) 0px, transparent 0.5px, transparent 50px),
+        repeating-linear-gradient(90deg, rgba(0, 212, 255, 0.04) 0px, transparent 0.5px, transparent 50px);
+      pointer-events: none;
+    }
+
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 212, 255, 0.07) 0%, transparent 70%);
+      filter: blur(80px);
+      pointer-events: none;
+      z-index: 0;
+    }
+    @keyframes drift1 {
+      0% { transform: translate(0, 0) scale(1); opacity: 0.06; }
+      25% { transform: translate(120px, -80px) scale(1.2); opacity: 0.08; }
+      50% { transform: translate(-60px, 100px) scale(0.8); opacity: 0.04; }
+      75% { transform: translate(80px, 60px) scale(1.1); opacity: 0.07; }
+      100% { transform: translate(0, 0) scale(1); opacity: 0.06; }
+    }
+    @keyframes drift2 {
+      0% { transform: translate(0, 0) scale(1); opacity: 0.05; }
+      25% { transform: translate(-100px, 90px) scale(0.9); opacity: 0.07; }
+      50% { transform: translate(80px, -60px) scale(1.3); opacity: 0.06; }
+      75% { transform: translate(-40px, -80px) scale(0.7); opacity: 0.04; }
+      100% { transform: translate(0, 0) scale(1); opacity: 0.05; }
+    }
+    @keyframes drift3 {
+      0% { transform: translate(0, 0) scale(1); opacity: 0.04; }
+      33% { transform: translate(90px, 40px) scale(1.1); opacity: 0.06; }
+      66% { transform: translate(-70px, -50px) scale(0.85); opacity: 0.03; }
+      100% { transform: translate(0, 0) scale(1); opacity: 0.04; }
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.6); }
+      50% { box-shadow: 0 0 0 12px rgba(0, 212, 255, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0); }
+    }
+    @keyframes slide-in {
+      from { transform: translateX(30px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .panel {
+      background: var(--panel-surface);
+      background-image: linear-gradient(135deg, var(--panel-glass), transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-metallic);
+      border-left: 1px solid rgba(0, 212, 255, 0.08);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-glow);
+      border-radius: var(--panel-radius);
+    }
+
+    .finding-card {
+      background: var(--panel-surface);
+      background-image: linear-gradient(135deg, var(--panel-glass), transparent);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--border-metallic);
+      border-left: 3px solid var(--severity-low);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      animation: slide-in 0.3s ease-out;
+    }
+    .finding-card.severity-critical { border-left-color: var(--severity-critical); }
+    .finding-card.severity-high { border-left-color: var(--severity-high); }
+    .finding-card.severity-medium { border-left-color: var(--severity-medium); }
+    .finding-card.severity-low { border-left-color: var(--severity-low); }
+
+    .status-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px;
+      font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+      background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .status-pill .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    .status-pill .dot.active { background: #30D158; box-shadow: 0 0 6px rgba(48, 209, 88, 0.6); }
+    .status-pill .dot.inactive { background: #8A94A8; }
+    .status-pill .dot.scanning { background: #00D4FF; box-shadow: 0 0 6px rgba(0, 212, 255, 0.6); }
+
+    .tag-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      font-size: 10px; font-weight: 600; font-family: var(--font-display);
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+    .tag-badge.info { background: rgba(0, 212, 255, 0.15); color: var(--accent-cyan); }
+    .tag-badge.vuln { background: rgba(255, 149, 0, 0.15); color: var(--severity-high); }
+    .tag-badge.exploit { background: rgba(255, 59, 48, 0.15); color: var(--severity-critical); }
+    .tag-badge.recon { background: rgba(48, 209, 88, 0.15); color: var(--severity-low); }
+
+    #scan-btn {
+      background: linear-gradient(135deg, #00D4FF 0%, #0077AA 100%);
+      border: none; border-radius: 6px; padding: 12px 24px;
+      font-family: var(--font-display); font-size: 16px; font-weight: 700;
+      color: #fff; letter-spacing: 1px; cursor: pointer;
+      transition: box-shadow 0.3s, transform 0.2s;
+      width: 100%; text-transform: uppercase;
+    }
+    #scan-btn:hover { box-shadow: 0 0 24px rgba(0, 212, 255, 0.5); transform: translateY(-1px); }
+    #scan-btn:active { transform: translateY(0); }
+    #scan-btn.scanning { animation: pulse-ring 1.5s ease-in-out infinite; }
+
+    .input-field {
+      width: 100%; padding: 10px 14px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-cyan);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-family: var(--font-mono); font-size: 13px;
+      outline: none; transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .input-field:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.15);
+    }
+    .input-field::placeholder { color: var(--text-secondary); opacity: 0.6; }
+
+    select.input-field { cursor: pointer; }
+    select.input-field option { background: var(--panel-surface); color: var(--text-primary); }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 999;
+      padding: 12px 20px; border-radius: 6px;
+      background: rgba(255, 59, 48, 0.15); border: 1px solid rgba(255, 59, 48, 0.3);
+      color: var(--severity-critical); font-family: var(--font-mono); font-size: 12px;
+      backdrop-filter: blur(12px); animation: slide-in 0.3s ease-out;
+    }
+
+    @media (max-width: 768px) {
+      .desktop-sidebar { width: 100% !important; }
+      .desktop-feed { width: 100% !important; }
+      .mobile-stack { flex-direction: column !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="bg-grid"></div>
+  <div class="orb" style="width:500px;height:500px;top:-100px;left:-100px;animation:drift1 20s ease-in-out infinite;animation-delay:0s;"></div>
+  <div class="orb" style="width:400px;height:400px;bottom:10%;right:5%;animation:drift2 25s ease-in-out infinite;animation-delay:2s;"></div>
+  <div class="orb" style="width:350px;height:350px;top:40%;left:30%;animation:drift3 18s ease-in-out infinite;animation-delay:4s;"></div>
+  <div class="orb" style="width:300px;height:300px;top:60%;right:40%;animation:drift1 22s ease-in-out infinite;animation-delay:6s;"></div>
+  <div class="orb" style="width:450px;height:450px;bottom:-80px;left:50%;animation:drift2 28s ease-in-out infinite;animation-delay:8s;"></div>
+
+  <div style="position:relative;z-index:1;min-height:100vh;display:flex;flex-direction:column;">
+    <header style="backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid rgba(0,212,255,0.2);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:24px;filter:drop-shadow(0 0 8px rgba(0,212,255,0.4));">&#x1F6E1;</span>
+        <span style="font-family:var(--font-display);font-size:22px;font-weight:700;letter-spacing:3px;color:var(--text-primary);">ARGUS</span>
+        <span style="font-family:var(--font-mono);font-size:10px;color:var(--text-secondary);padding-top:4px;">v1.0</span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div class="status-pill"><span class="dot active" id="dot-system"></span><span id="status-system">System Active</span></div>
+        <div class="status-pill"><span class="dot inactive" id="dot-bd"></span><span id="status-bd">Bright Data</span></div>
+        <div class="status-pill"><span class="dot inactive" id="dot-ollama"></span><span id="status-ollama">Ollama</span></div>
+      </div>
+    </header>
+
+    <div class="mobile-stack" style="display:flex;flex:1;gap:0;">
+      <aside class="desktop-sidebar" style="width:280px;flex-shrink:0;padding:16px;display:flex;flex-direction:column;gap:16px;border-right:1px solid var(--border-cyan);">
+        <div class="panel" style="padding:16px;">
+          <div style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;">Target</div>
+          <input type="text" class="input-field" id="target-input" placeholder="example.com" style="margin-bottom:10px;">
+          <select class="input-field" id="focus-select" style="margin-bottom:14px;">
+            <option value="full">Full Reconnaissance</option>
+            <option value="vulnerabilities">Vulnerability Scan</option>
+            <option value="osint">OSINT Gathering</option>
+            <option value="social">Social Engineering</option>
+          </select>
+          <button id="scan-btn">INITIATE SCAN</button>
+        </div>
+
+        <div class="panel" style="padding:16px;display:none;" id="risk-gauge-card">
+          <div style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px;text-align:center;">Risk Score</div>
+          <div style="position:relative;width:100%;max-width:180px;margin:0 auto;">
+            <svg viewBox="0 0 120 120" style="width:100%;height:auto;">
+              <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="6"/>
+              <circle cx="60" cy="60" r="52" fill="none" stroke="#30D158" stroke-width="6" stroke-linecap="round" id="gauge-arc"
+                stroke-dasharray="326.7" stroke-dashoffset="326.7" transform="rotate(-90 60 60)"/>
+            </svg>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <span id="gauge-score" style="font-family:var(--font-display);font-size:36px;font-weight:700;line-height:1;color:var(--text-primary);">--</span>
+              <span style="font-family:var(--font-mono);font-size:9px;color:var(--text-secondary);letter-spacing:1.5px;margin-top:2px;">THREAT INDEX</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" style="padding:16px;">
+          <div style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Attack Mode</div>
+          <button id="attack-mode-btn" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-cyan);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:var(--font-display);font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;">
+            &#x25B6; STANDARD
+          </button>
+        </div>
+
+        <div class="panel" style="padding:16px;">
+          <div style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Bright Data Stack</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--severity-low);box-shadow:0 0 6px rgba(48,209,88,0.5);"></span> MCP Server <span style="color:var(--text-secondary);margin-left:auto;">&#x2713; Active</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--severity-low);box-shadow:0 0 6px rgba(48,209,88,0.5);"></span> Web Unlocker <span style="color:var(--text-secondary);margin-left:auto;">&#x2713; Active</span></div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--severity-low);box-shadow:0 0 6px rgba(48,209,88,0.5);"></span> SERP API <span style="color:var(--text-secondary);margin-left:auto;">&#x2713; Active</span></div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="desktop-feed" style="flex:1;display:flex;flex-direction:column;padding:16px;gap:12px;min-width:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-family:var(--font-display);font-size:18px;font-weight:700;letter-spacing:1px;">Live Intelligence Feed</span>
+          </div>
+          <div id="feed-status" style="font-size:11px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+            <span id="status-dot" style="width:6px;height:6px;border-radius:50%;background:var(--text-secondary);display:inline-block;"></span>
+            <span id="status-text">Standby</span>
+            <span id="finding-count" style="margin-left:8px;color:var(--text-secondary);"></span>
+          </div>
+        </div>
+
+        <div id="feed-area" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;min-height:300px;">
+          <div id="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;min-height:250px;color:var(--text-secondary);font-family:var(--font-mono);font-size:13px;text-align:center;gap:8px;">
+            <div style="font-size:32px;opacity:0.3;">&#x1F441;</div>
+            <div>Enter a target to begin autonomous surveillance</div>
+            <div style="font-size:11px;opacity:0.5;">ARGUS will scan DNS, WHOIS, subdomains, CVEs, and more</div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="threat-card" style="display:none;border-top:1px solid var(--border-cyan);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:20px 24px;">
+      <div style="max-width:800px;margin:0 auto;display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:16px;">
+          <span id="threat-score" style="font-family:var(--font-display);font-size:48px;font-weight:700;line-height:1;color:var(--severity-low);">0</span>
+          <div>
+            <div id="threat-label" style="font-family:var(--font-display);font-size:16px;font-weight:600;letter-spacing:1px;color:var(--severity-low);">SECURE</div>
+            <div style="font-size:10px;color:var(--text-secondary);letter-spacing:1.5px;text-transform:uppercase;">Overall Threat Level</div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:200px;border-left:1px solid rgba(255,255,255,0.08);padding-left:24px;">
+          <div id="threat-recs" style="font-size:12px;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function getSeverityClass(severity) {
+      const s = (severity || '').toLowerCase();
+      if (s === 'critical' || s === 'critical') return 'severity-critical';
+      if (s === 'high') return 'severity-high';
+      if (s === 'medium') return 'severity-medium';
+      return 'severity-low';
+    }
+
+    function getTagClass(type) {
+      const t = (type || '').toLowerCase();
+      if (t === 'vulnerability' || t === 'vuln' || t === 'cve') return 'vuln';
+      if (t === 'exploit' || t === 'attack') return 'exploit';
+      if (t === 'recon' || t === 'dns' || t === 'whois' || t === 'subdomain') return 'recon';
+      return 'info';
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    }
+
+    const state = {
+      scanState: 'idle',
+      findings: [],
+      ws: null,
+      attackMode: false,
+      score: 0,
+    };
+
+    const targetInput = document.getElementById('target-input');
+    const focusSelect = document.getElementById('focus-select');
+    const scanBtn = document.getElementById('scan-btn');
+    const feedArea = document.getElementById('feed-area');
+    const emptyState = document.getElementById('empty-state');
+    const feedStatus = document.getElementById('feed-status');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const findingCount = document.getElementById('finding-count');
+    const riskGaugeCard = document.getElementById('risk-gauge-card');
+    const gaugeArc = document.getElementById('gauge-arc');
+    const gaugeScore = document.getElementById('gauge-score');
+    const threatCard = document.getElementById('threat-card');
+    const threatScore = document.getElementById('threat-score');
+    const threatLabel = document.getElementById('threat-label');
+    const threatRecs = document.getElementById('threat-recs');
+    const attackModeBtn = document.getElementById('attack-mode-btn');
+    const dotSystem = document.getElementById('dot-system');
+    const dotBd = document.getElementById('dot-bd');
+    const dotOllama = document.getElementById('dot-ollama');
+
+    const circumference = 2 * Math.PI * 52;
+
+    function updateGauge(score) {
+      const clamped = Math.max(0, Math.min(100, score));
+      threatScore.textContent = clamped;
+      gaugeScore.textContent = clamped;
+
+      let color, label;
+      if (clamped < 25) { color = '#30D158'; label = 'SECURE'; }
+      else if (clamped < 50) { color = '#FFD60A'; label = 'ELEVATED'; }
+      else if (clamped < 75) { color = '#FF9500'; label = 'HIGH'; }
+      else { color = '#FF3B30'; label = 'CRITICAL'; }
+
+      const offset = circumference - (clamped / 100) * circumference;
+      gaugeArc.style.stroke = color;
+      gaugeArc.style.strokeDashoffset = offset;
+      gaugeArc.style.transition = 'stroke-dashoffset 1s ease, stroke 0.5s ease';
+      threatScore.style.color = color;
+      threatLabel.style.color = color;
+      threatLabel.textContent = label;
+    }
+
+    function renderFinding(data) {
+      const card = document.createElement('div');
+      card.className = 'finding-card ' + getSeverityClass(data.severity);
+      card.style.padding = '14px 16px';
+
+      const type = data.type || 'info';
+      const title = data.title || data.finding || 'Unknown finding';
+      const source = data.source || data.url || '';
+      const ts = data.timestamp || data.timestamp || new Date().toISOString();
+      const sev = (data.severity || 'low').toUpperCase();
+
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span class="tag-badge ` + getTagClass(type) + `">` + escapeHtml(type) + `</span>
+              <span style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">` + escapeHtml(sev) + `</span>
+            </div>
+            <div style="font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:2px;">` + escapeHtml(title) + `</div>
+            ` + (data.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">` + escapeHtml(data.description) + `</div>` : '') + `
+            ` + (source ? `<div style="font-size:10px;color:var(--text-secondary);opacity:0.6;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">` + escapeHtml(source) + `</div>` : '') + `
+          </div>
+          <div style="font-size:10px;color:var(--text-secondary);opacity:0.5;font-family:var(--font-mono);white-space:nowrap;flex-shrink:0;">` + new Date(ts).toLocaleTimeString() + `</div>
+        </div>
+      `;
+      feedArea.insertBefore(card, feedArea.firstChild);
+      state.findings.push(data);
+      findingCount.textContent = '[' + state.findings.length + ' findings]';
+    }
+
+    function showFeedStatus(text, color) {
+      statusText.textContent = text;
+      statusDot.style.background = color;
+    }
+
+    function renderComplete(data) {
+      showFeedStatus('Complete', '#30D158');
+      scanBtn.textContent = 'INITIATE SCAN';
+      scanBtn.classList.remove('scanning');
+      state.scanState = 'complete';
+
+      const score = data && data.score != null ? data.score : (state.score || 0);
+      updateGauge(score);
+      riskGaugeCard.style.display = 'block';
+      threatCard.style.display = 'block';
+
+      if (data && data.recommendations) {
+        const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
+        threatRecs.innerHTML = recs.map(r => '<div>&#x2022; ' + escapeHtml(r) + '</div>').join('');
+      } else {
+        threatRecs.innerHTML = '<div>&#x2022; Scan complete. No recommendations provided.</div>';
+      }
+    }
+
+    function showToast(msg) {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    }
+
+    function connectWS(company) {
+      if (state.ws) {
+        state.ws.onclose = null;
+        state.ws.close();
+      }
+      const url = 'ws://localhost:8000/ws/' + encodeURIComponent(company);
+      state.ws = new WebSocket(url);
+
+      state.ws.onopen = function() {
+        const focus = focusSelect.value;
+        state.ws.send(JSON.stringify({ focus: focus }));
+        showFeedStatus('Scanning\u2026', '#00D4FF');
+        dotSystem.className = 'dot scanning';
+      };
+
+      state.ws.onmessage = function(event) {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'finding') {
+            renderFinding(data.data || data);
+          } else if (data.type === 'complete') {
+            renderComplete(data.data || data);
+          } else if (data.type === 'error') {
+            showToast('Scan error: ' + (data.data && data.data.message ? data.data.message : 'Unknown'));
+          }
+        } catch(e) {
+          console.warn('WS parse error:', e);
+        }
+      };
+
+      state.ws.onerror = function() {
+        showToast('Backend unreachable. Start uvicorn first.');
+        resetToIdle();
+      };
+
+      state.ws.onclose = function() {
+        if (state.scanState === 'scanning') {
+          showToast('Connection lost. Backend may be down.');
+          resetToIdle();
+        }
+      };
+    }
+
+    function resetToIdle() {
+      state.scanState = 'idle';
+      scanBtn.textContent = 'INITIATE SCAN';
+      scanBtn.classList.remove('scanning');
+      showFeedStatus('Standby', 'var(--text-secondary)');
+      statusDot.style.background = 'var(--text-secondary)';
+      dotSystem.className = 'dot active';
+    }
+
+    function startScan() {
+      const target = targetInput.value.trim();
+      if (!target) {
+        targetInput.focus();
+        targetInput.style.borderColor = '#FF3B30';
+        setTimeout(() => targetInput.style.borderColor = '', 2000);
+        return;
+      }
+
+      state.scanState = 'scanning';
+      state.findings = [];
+      feedArea.innerHTML = '';
+      threatCard.style.display = 'none';
+      riskGaugeCard.style.display = 'none';
+      findingCount.textContent = '';
+
+      scanBtn.textContent = 'SCANNING\u2026';
+      scanBtn.classList.add('scanning');
+
+      resetGauge();
+
+      connectWS(target);
+    }
+
+    function resetGauge() {
+      gaugeArc.style.stroke = '#30D158';
+      gaugeArc.style.strokeDashoffset = circumference;
+      gaugeScore.textContent = '--';
+    }
+
+    attackModeBtn.addEventListener('click', function() {
+      state.attackMode = !state.attackMode;
+      if (state.attackMode) {
+        attackModeBtn.style.borderColor = '#FF3B30';
+        attackModeBtn.style.color = '#FF3B30';
+        attackModeBtn.style.boxShadow = '0 0 16px rgba(255,59,48,0.2)';
+        attackModeBtn.innerHTML = '\u26A0 ATTACK SIM ACTIVE';
+      } else {
+        attackModeBtn.style.borderColor = '';
+        attackModeBtn.style.color = '';
+        attackModeBtn.style.boxShadow = '';
+        attackModeBtn.innerHTML = '\u25B6 STANDARD';
+      }
+    });
+
+    scanBtn.addEventListener('click', startScan);
+    targetInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') startScan();
+    });
+
+    setTimeout(function() {
+      dotOllama.className = 'dot inactive';
+      dotBd.className = 'dot active';
+    }, 2000);
+
+    console.log('ARGUS v1.0 loaded. Enter a target to begin.');
+    console.log('WebSocket will connect to ws://localhost:8000/ws/{target}');
+  </script>
+</body>
+</html>
