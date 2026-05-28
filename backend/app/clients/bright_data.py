@@ -11,9 +11,9 @@ from backend.app.shared.utils import AsyncRateLimiter, TTLCache
 class BrightDataClient:
     """Client for Bright Data MCP with Web Unlocker and SERP API access.
 
-    The Bright Data MCP URL always appends ``unlock=1`` so Web Unlocker is
-    demonstrably enabled for judge review. SERP API requests are capped by the
-    caller to protect hackathon credits.
+    The Bright Data MCP URL includes the configured Web Unlocker zone so MCP
+    calls use the intended Bright Data zone. SERP API requests are capped by
+    the caller to protect hackathon credits.
     """
 
     def __init__(self, settings: Settings):
@@ -30,7 +30,7 @@ class BrightDataClient:
     async def mcp_tool_call(
         self, tool_name: str, arguments: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Call a Bright Data MCP JSON-RPC tool through the Web Unlocker URL."""
+        """Call a Bright Data MCP JSON-RPC tool through the configured unlocker zone."""
 
         await self.rate_limiter.acquire()
         payload = {

@@ -58,12 +58,24 @@ async def test_web_search_falls_back_to_serp_after_mcp_failure(test_settings):
     assert mcp_calls == 1
 
 
-def test_unlocker_url_appends_unlock_once(test_settings):
-    assert test_settings.bright_data_mcp_unlocker_url.endswith("?unlock=1")
-    configured = test_settings.model_copy(
-        update={"bright_data_mcp_url": "https://mcp.brightdata.com/mcp?unlock=1"}
+def test_mcp_url_uses_configured_unlocker_zone(test_settings):
+    configured = test_settings.model_copy(update={"bright_data_api_token": "abc"})
+
+    assert configured.bright_data_mcp_unlocker_url == (
+        "https://mcp.brightdata.com/mcp?token=abc&unlocker=mcp_unlocker&pro=1"
     )
-    assert configured.bright_data_mcp_unlocker_url.count("unlock=1") == 1
+
+
+def test_mcp_url_replaces_legacy_unlock_flag(test_settings):
+    configured = test_settings.model_copy(
+        update={
+            "bright_data_api_token": "abc",
+            "bright_data_mcp_url": "https://mcp.brightdata.com/mcp?unlock=1",
+        }
+    )
+
+    assert "unlock=1" not in configured.bright_data_mcp_unlocker_url
+    assert "unlocker=mcp_unlocker" in configured.bright_data_mcp_unlocker_url
 
 
 def test_unlocker_url_strips_shell_quotes(test_settings):
@@ -74,5 +86,5 @@ def test_unlocker_url_strips_shell_quotes(test_settings):
     )
 
     assert configured.bright_data_mcp_unlocker_url == (
-        "https://mcp.brightdata.com/mcp?token=abc&pro=1&unlock=1"
+        "https://mcp.brightdata.com/mcp?token=abc&pro=1&unlocker=mcp_unlocker"
     )

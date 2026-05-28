@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from typing import List
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,7 +25,7 @@ class Settings(BaseSettings):
     bright_data_api_token: str = ""
     bright_data_serp_endpoint: str = "https://api.brightdata.com/request"
     bright_data_serp_zone: str = ""
-    bright_data_web_unlocker_zone: str = ""
+    bright_data_web_unlocker_zone: str = "mcp_unlocker"
     bright_data_mcp_search_tool: str = "search_engine"
     bright_data_country: str = "us"
     max_serp_queries: int = 6
@@ -56,13 +57,32 @@ class Settings(BaseSettings):
 
     @property
     def bright_data_mcp_unlocker_url(self) -> str:
-        """Return Bright Data MCP URL with Web Unlocker enabled via unlock=1."""
+        """Return Bright Data remote MCP URL configured with the Web Unlocker zone."""
 
         mcp_url = self.bright_data_mcp_url.strip().strip("\"'")
-        separator = "&" if "?" in mcp_url else "?"
-        if "unlock=1" in mcp_url:
-            return mcp_url
-        return f"{mcp_url}{separator}unlock=1"
+        parts = urlsplit(mcp_url)
+        query_items = dict(parse_qsl(parts.query, keep_blank_values=True))
+
+        query_items.pop("unlock", None)
+        if self.bright_data_api_token and not query_items.get("token"):
+            query_items["token"] = self.bright_data_api_token.strip().strip("\"'")
+        unlocker_zone = (
+            self.bright_data_web_unlocker_zone.strip().strip("\"'") or "mcp_unlocker"
+        )
+        if not query_items.get("unlocker"):
+            query_items["unlocker"] = unlocker_zone
+        if not query_items.get("pro"):
+            query_items["pro"] = "1"
+
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                parts.path,
+                urlencode(query_items),
+                parts.fragment,
+            )
+        )
 
 
 @lru_cache

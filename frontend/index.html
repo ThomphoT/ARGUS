@@ -228,7 +228,7 @@
             <option value="osint">OSINT Gathering</option>
             <option value="social">Social Engineering</option>
           </select>
-          <button id="scan-btn">INITIATE SCAN</button>
+          <button id="scan-btn" type="button">INITIATE SCAN</button>
         </div>
 
         <div class="panel" style="padding:16px;display:none;" id="risk-gauge-card">
@@ -248,7 +248,7 @@
 
         <div class="panel" style="padding:16px;">
           <div style="font-family:var(--font-display);font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;">Attack Mode</div>
-          <button id="attack-mode-btn" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-cyan);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:var(--font-display);font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;">
+          <button id="attack-mode-btn" type="button" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border-cyan);background:rgba(0,0,0,0.3);color:var(--text-primary);font-family:var(--font-display);font-size:14px;font-weight:600;cursor:pointer;transition:all 0.3s;">
             &#x25B6; STANDARD
           </button>
         </div>
@@ -495,7 +495,10 @@
       dotSystem.className = 'dot active';
     }
 
-    function startScan() {
+    function startScan(event) {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
       const target = targetInput.value.trim();
       if (!target) {
         targetInput.focus();
@@ -542,7 +545,7 @@
 
     scanBtn.addEventListener('click', startScan);
     targetInput.addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') startScan();
+      if (e.key === 'Enter') startScan(e);
     });
 
     setTimeout(function() {
