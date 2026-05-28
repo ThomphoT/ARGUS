@@ -5,13 +5,16 @@ import logging
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.clients.bright_data import BrightDataClient
 from backend.app.core.config import get_settings
 from backend.app.models import ScanRequest
 from backend.app.services.agent import ArgusAgent
 from backend.app.utils.domain import normalize_domain
 
 logger = logging.getLogger("argus")
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 settings = get_settings()
 
@@ -31,13 +34,22 @@ app.add_middleware(
 )
 
 
+def _active_llm_provider() -> str:
+    if settings.llm_provider == "auto":
+        return "openai" if settings.openai_api_key else "ollama"
+    return settings.llm_provider
+
+
 @app.get("/health")
 async def health() -> dict:
+    bright_data = BrightDataClient(settings)
     return {
         "status": "ok",
         "bright_data_mcp_web_unlocker_url": settings.bright_data_mcp_unlocker_url,
-        "llm_provider": "openai" if settings.openai_api_key else "ollama",
+        "llm_provider": _active_llm_provider(),
+        "openai_model": settings.openai_model,
         "ollama_model": settings.ollama_model,
+        "bright_data": bright_data.status(),
         "cognee_enabled": settings.cognee_enabled,
         "triggerware_configured": bool(settings.triggerware_webhook_url),
     }
@@ -48,7 +60,7 @@ async def scan(request: ScanRequest) -> dict:
     domain = normalize_domain(request.company_domain)
     agent = ArgusAgent(settings)
     events = []
-    async for event in agent.stream_scan(domain):
+    async for event in agent.stream_scan(domain, request.focus, request.attack_mode):
         events.append(event)
     return {"events": events}
 
@@ -58,10 +70,24 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
     await websocket.accept()
     try:
         domain = normalize_domain(company_domain)
-        logger.info("Starting scan for domain=%s", domain)
+        focus = "full"
+        attack_mode = False
+        try:
+            payload = await websocket.receive_json()
+            focus = payload.get("focus", focus)
+            attack_mode = bool(payload.get("attack_mode", attack_mode))
+        except Exception:
+            pass
+
+        logger.info(
+            "Starting scan for domain=%s focus=%s attack_mode=%s",
+            domain,
+            focus,
+            attack_mode,
+        )
         agent = ArgusAgent(settings)
         event_count = 0
-        async for event in agent.stream_scan(domain):
+        async for event in agent.stream_scan(domain, focus, attack_mode):
             await websocket.send_json(event)
             event_count += 1
         logger.info("Scan complete for domain=%s, events=%d", domain, event_count)
@@ -69,7 +95,12 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
         logger.warning("Client disconnected during scan for domain=%s", company_domain)
         return
     except Exception as exc:
-        logger.error("Scan error for domain=%s: %s: %s", company_domain, type(exc).__name__, exc)
+        logger.error(
+            "Scan error for domain=%s: %s: %s",
+            company_domain,
+            type(exc).__name__,
+            exc,
+        )
         try:
             await websocket.send_json({"type": "error", "data": {"message": str(exc)}})
         except Exception:

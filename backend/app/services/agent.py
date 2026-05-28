@@ -7,6 +7,7 @@ from backend.app.clients.bright_data import BrightDataClient
 from backend.app.collectors.attack_simulator import AttackSimulator
 from backend.app.collectors.domain_monitor import DomainMonitor
 from backend.app.collectors.leak_scanner import LeakScanner
+from backend.app.collectors.threat_intel import ThreatIntel
 from backend.app.core.config import Settings
 from backend.app.models import ClassifiedFinding, ScanSummary, Severity
 from backend.app.services.alerts import TriggerWareAlerts
@@ -25,20 +26,29 @@ class ArgusAgent:
         self.reasoner = ThreatReasoner()
         self.memory = ThreatMemory(settings)
         self.alerts = TriggerWareAlerts(settings)
-        self.collectors = [
-            LeakScanner(self.bright_data),
-            DomainMonitor(self.bright_data),
-            AttackSimulator(self.bright_data),
-        ]
+        self.collector_map = {
+            "leak_scanner": LeakScanner(self.bright_data),
+            "domain_monitor": DomainMonitor(self.bright_data),
+            "threat_intel": ThreatIntel(self.bright_data),
+            "attack_simulator": AttackSimulator(self.bright_data),
+        }
 
-    async def stream_scan(self, company_domain: str) -> AsyncIterator[dict]:
+    async def stream_scan(
+        self, company_domain: str, focus: str = "full", attack_mode: bool = False
+    ) -> AsyncIterator[dict]:
         classified_findings: List[ClassifiedFinding] = []
-        for collector in self.collectors:
+        for collector in self._select_collectors(focus, attack_mode):
             collector_name = type(collector).__name__
-            logger.info("Collector %s starting for domain=%s", collector_name, company_domain)
+            logger.info(
+                "Collector %s starting for domain=%s", collector_name, company_domain
+            )
             try:
                 async for raw in collector.collect(company_domain):
-                    logger.debug("Collector %s found raw finding: %s", collector_name, raw.title[:60])
+                    logger.debug(
+                        "Collector %s found raw finding: %s",
+                        collector_name,
+                        raw.title[:60],
+                    )
                     finding = await self.reasoner.classify(raw)
                     classified_findings.append(finding)
                     await self.memory.store(finding)
@@ -47,11 +57,36 @@ class ArgusAgent:
                     event_data["type"] = finding.collector.value
                     yield {"type": "finding", "data": event_data}
             except Exception as exc:
-                logger.error("Collector %s failed for domain=%s: %s: %s", collector_name, company_domain, type(exc).__name__, exc)
+                logger.error(
+                    "Collector %s failed for domain=%s: %s: %s",
+                    collector_name,
+                    company_domain,
+                    type(exc).__name__,
+                    exc,
+                )
 
         summary = self.summarize(company_domain, classified_findings)
-        logger.info("Scan summary for domain=%s: score=%d, findings=%d", company_domain, summary.score, summary.finding_count)
+        logger.info(
+            "Scan summary for domain=%s: score=%d, findings=%d",
+            company_domain,
+            summary.score,
+            summary.finding_count,
+        )
         yield {"type": "complete", "data": summary.model_dump(mode="json")}
+
+    def _select_collectors(self, focus: str, attack_mode: bool):
+        focus = (focus or "full").lower()
+        names = {
+            "vulnerabilities": ["leak_scanner"],
+            "osint": ["domain_monitor", "threat_intel"],
+            "social": ["domain_monitor", "threat_intel"],
+            "attack": ["attack_simulator"],
+            "full": ["leak_scanner", "domain_monitor", "threat_intel"],
+        }.get(focus, ["leak_scanner", "domain_monitor", "threat_intel"])
+
+        if attack_mode and "attack_simulator" not in names:
+            names.append("attack_simulator")
+        return [self.collector_map[name] for name in names]
 
     def summarize(
         self, company_domain: str, findings: List[ClassifiedFinding]

@@ -25,18 +25,23 @@ class Settings(BaseSettings):
     bright_data_serp_endpoint: str = "https://api.brightdata.com/request"
     bright_data_serp_zone: str = ""
     bright_data_web_unlocker_zone: str = ""
+    bright_data_mcp_search_tool: str = "search_engine"
     bright_data_country: str = "us"
     max_serp_queries: int = 6
     max_results_per_query: int = 5
     request_timeout_seconds: float = 25.0
+    enable_mock_data: bool = True
+    cache_ttl_seconds: int = 900
+    max_requests_per_minute: int = 30
 
+    llm_provider: str = "auto"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    llm_failure_cooldown_seconds: int = 60
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "chevalblanc/gpt-4o-mini"
 
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o"
-
-    cognee_enabled: bool = False
+    cognee_enabled: bool = True
     cognee_dataset: str = "argus-threat-memory"
     local_memory_path: str = "backend/data/threat_memory.jsonl"
 

@@ -450,7 +450,7 @@
 
       state.ws.onopen = function() {
         const focus = focusSelect.value;
-        state.ws.send(JSON.stringify({ focus: focus }));
+        state.ws.send(JSON.stringify({ focus: focus, attack_mode: state.attackMode }));
         showFeedStatus('Scanning\u2026', '#00D4FF');
         dotSystem.className = 'dot scanning';
       };

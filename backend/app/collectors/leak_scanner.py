@@ -17,7 +17,7 @@ class LeakScanner(BaseCollector):
         ][: self.bright_data.settings.max_serp_queries]
 
         for query in queries:
-            results = await self.bright_data.serp_search(
+            results = await self.bright_data.web_search(
                 query, self.bright_data.settings.max_results_per_query
             )
             for result in results:
@@ -26,6 +26,7 @@ class LeakScanner(BaseCollector):
                     collector=CollectorName.LEAK_SCANNER,
                     title=result["title"],
                     description=result["snippet"],
+                    source=result.get("via") or "Bright Data SERP API",
                     url=result.get("url"),
                     evidence={"query": query, "serp_result": result},
                 )

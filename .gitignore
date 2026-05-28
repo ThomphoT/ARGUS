@@ -2,6 +2,8 @@ frontend/.env
 backend/.env
 .idea/
 .venv/
+venv/
+backend/venv/
 __pycache__/
 *.pyc
 backend/data/

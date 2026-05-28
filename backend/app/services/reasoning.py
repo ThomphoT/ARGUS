@@ -1,7 +1,9 @@
 """LangGraph orchestration for ARGUS risk reasoning."""
 
+import asyncio
 import json
 import re
+import time
 from typing import Any, Dict, TypedDict
 
 from langgraph.graph import END, StateGraph
@@ -10,6 +12,8 @@ from backend.app.clients.ollama_client import call_ollama
 from backend.app.clients.openai_client import call_openai
 from backend.app.core.config import get_settings
 from backend.app.models import ClassifiedFinding, RawFinding, Severity
+
+LLM_CIRCUIT_OPEN_UNTIL = 0.0
 
 
 class ReasoningState(TypedDict):
@@ -63,30 +67,6 @@ def _fallback_analysis(raw: RawFinding) -> Dict[str, Any]:
     }
 
 
-import concurrent.futures
-
-
-def _call_llm(prompt: str) -> str:
-    settings = get_settings()
-    if settings.openai_api_key:
-        return call_openai(prompt)
-    return call_ollama(prompt)
-
-
-def _call_llm_with_timeout(prompt: str, timeout: float = 5.0) -> str:
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    fut = pool.submit(_call_llm, prompt)
-    try:
-        return fut.result(timeout=timeout)
-    except concurrent.futures.TimeoutError:
-        fut.cancel()
-        return ""
-    except Exception:
-        return ""
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
-
-
 def _parse_json_response(text: str) -> Dict[str, Any]:
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
@@ -94,7 +74,31 @@ def _parse_json_response(text: str) -> Dict[str, Any]:
     return json.loads(match.group(0))
 
 
-def analyze_finding(state: ReasoningState) -> ReasoningState:
+async def _call_llm(prompt: str) -> str:
+    global LLM_CIRCUIT_OPEN_UNTIL
+
+    settings = get_settings()
+    if time.monotonic() < LLM_CIRCUIT_OPEN_UNTIL:
+        raise RuntimeError("LLM circuit breaker is open after recent provider failures")
+
+    provider = settings.llm_provider.lower().strip()
+    if provider == "auto":
+        provider = "openai" if settings.openai_api_key else "ollama"
+
+    try:
+        if provider == "openai":
+            return await call_openai(prompt, settings)
+        return await asyncio.wait_for(
+            asyncio.to_thread(call_ollama, prompt), timeout=5.0
+        )
+    except Exception:
+        LLM_CIRCUIT_OPEN_UNTIL = (
+            time.monotonic() + settings.llm_failure_cooldown_seconds
+        )
+        raise
+
+
+async def analyze_finding(state: ReasoningState) -> ReasoningState:
     raw = state["raw"]
     prompt = f"""
 You are ARGUS, an autonomous cyber intelligence analyst for Security & Compliance.
@@ -107,7 +111,7 @@ JSON schema:
 {{"severity":"CRITICAL|HIGH|MEDIUM|LOW","risk_score":0-100,"reasoning":"short actionable rationale","recommendations":["action 1","action 2"]}}
 """
     try:
-        analysis = _parse_json_response(_call_llm_with_timeout(prompt))
+        analysis = _parse_json_response(await _call_llm(prompt))
     except Exception:
         analysis = _fallback_analysis(raw)
     state["analysis"] = analysis

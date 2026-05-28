@@ -19,11 +19,13 @@ class CollectorName(str, Enum):
     LEAK_SCANNER = "leak_scanner"
     DOMAIN_MONITOR = "domain_monitor"
     ATTACK_SIMULATOR = "attack_simulator"
+    THREAT_INTEL = "threat_intel"
 
 
 class ScanRequest(BaseModel):
     company_domain: str = Field(..., min_length=3, max_length=255)
     focus: str = Field(default="full", max_length=64)
+    attack_mode: bool = False
 
 
 class RawFinding(BaseModel):
