@@ -7,6 +7,8 @@ from typing import Any, Dict, TypedDict
 from langgraph.graph import END, StateGraph
 
 from backend.app.clients.ollama_client import call_ollama
+from backend.app.clients.openai_client import call_openai
+from backend.app.core.config import get_settings
 from backend.app.models import ClassifiedFinding, RawFinding, Severity
 
 
@@ -61,10 +63,34 @@ def _fallback_analysis(raw: RawFinding) -> Dict[str, Any]:
     }
 
 
+import concurrent.futures
+
+
+def _call_llm(prompt: str) -> str:
+    settings = get_settings()
+    if settings.openai_api_key:
+        return call_openai(prompt)
+    return call_ollama(prompt)
+
+
+def _call_llm_with_timeout(prompt: str, timeout: float = 5.0) -> str:
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    fut = pool.submit(_call_llm, prompt)
+    try:
+        return fut.result(timeout=timeout)
+    except concurrent.futures.TimeoutError:
+        fut.cancel()
+        return ""
+    except Exception:
+        return ""
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
 def _parse_json_response(text: str) -> Dict[str, Any]:
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if not match:
-        raise ValueError("Ollama response did not include JSON")
+        raise ValueError("LLM response did not include JSON")
     return json.loads(match.group(0))
 
 
@@ -81,7 +107,7 @@ JSON schema:
 {{"severity":"CRITICAL|HIGH|MEDIUM|LOW","risk_score":0-100,"reasoning":"short actionable rationale","recommendations":["action 1","action 2"]}}
 """
     try:
-        analysis = _parse_json_response(call_ollama(prompt))
+        analysis = _parse_json_response(_call_llm_with_timeout(prompt))
     except Exception:
         analysis = _fallback_analysis(raw)
     state["analysis"] = analysis
@@ -114,10 +140,10 @@ def build_reasoning_graph():
     """Build the LangGraph StateGraph used to classify ARGUS findings."""
 
     graph = StateGraph(ReasoningState)
-    graph.add_node("analyze_with_ollama", analyze_finding)
+    graph.add_node("analyze_finding", analyze_finding)
     graph.add_node("classify_risk", classify_finding)
-    graph.set_entry_point("analyze_with_ollama")
-    graph.add_edge("analyze_with_ollama", "classify_risk")
+    graph.set_entry_point("analyze_finding")
+    graph.add_edge("analyze_finding", "classify_risk")
     graph.add_edge("classify_risk", END)
     return graph.compile()
 

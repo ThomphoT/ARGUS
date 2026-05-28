@@ -1,19 +1,16 @@
 """Ollama reasoning client for ARGUS."""
 
-import os
-
-from ollama import chat
+from ollama import Client
 
 from backend.app.core.config import get_settings
 
 
-def call_ollama(prompt):
-    """Core ARGUS LLM driver using chevalblanc/gpt-4o-mini through Ollama."""
-
+def call_ollama(prompt: str) -> str:
+    """Core ARGUS LLM driver using Ollama."""
     settings = get_settings()
-    os.environ.setdefault("OLLAMA_HOST", settings.ollama_host)
-    response = chat(
-        model="chevalblanc/gpt-4o-mini",
+    client = Client(host=settings.ollama_host, timeout=5)
+    response = client.chat(
+        model=settings.ollama_model,
         messages=[{"role": "user", "content": prompt}],
     )
     message = getattr(response, "message", None)

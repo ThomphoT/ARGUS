@@ -213,6 +213,7 @@
         <div class="status-pill"><span class="dot active" id="dot-system"></span><span id="status-system">System Active</span></div>
         <div class="status-pill"><span class="dot inactive" id="dot-bd"></span><span id="status-bd">Bright Data</span></div>
         <div class="status-pill"><span class="dot inactive" id="dot-ollama"></span><span id="status-ollama">Ollama</span></div>
+        <div class="status-pill"><span class="dot inactive" id="dot-openai"></span><span id="status-openai">OpenAI</span></div>
       </div>
     </header>
 
@@ -351,6 +352,7 @@
     const dotSystem = document.getElementById('dot-system');
     const dotBd = document.getElementById('dot-bd');
     const dotOllama = document.getElementById('dot-ollama');
+    const dotOpenai = document.getElementById('dot-openai');
 
     const circumference = 2 * Math.PI * 52;
 
@@ -543,6 +545,7 @@
     setTimeout(function() {
       dotOllama.className = 'dot inactive';
       dotBd.className = 'dot active';
+      dotOpenai.className = 'dot active';
     }, 2000);
 
     console.log('ARGUS v1.0 loaded. Enter a target to begin.');

@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     ollama_host: str = "http://localhost:11434"
     ollama_model: str = "chevalblanc/gpt-4o-mini"
 
-    cognee_enabled: bool = True
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o"
+
+    cognee_enabled: bool = False
     cognee_dataset: str = "argus-threat-memory"
     local_memory_path: str = "backend/data/threat_memory.jsonl"
 

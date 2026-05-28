@@ -1,5 +1,7 @@
 """FastAPI entry point for the ARGUS backend intelligence system."""
 
+import logging
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,6 +9,9 @@ from backend.app.core.config import get_settings
 from backend.app.models import ScanRequest
 from backend.app.services.agent import ArgusAgent
 from backend.app.utils.domain import normalize_domain
+
+logger = logging.getLogger("argus")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 settings = get_settings()
 
@@ -31,6 +36,7 @@ async def health() -> dict:
     return {
         "status": "ok",
         "bright_data_mcp_web_unlocker_url": settings.bright_data_mcp_unlocker_url,
+        "llm_provider": "openai" if settings.openai_api_key else "ollama",
         "ollama_model": settings.ollama_model,
         "cognee_enabled": settings.cognee_enabled,
         "triggerware_configured": bool(settings.triggerware_webhook_url),
@@ -52,18 +58,22 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
     await websocket.accept()
     try:
         domain = normalize_domain(company_domain)
-        try:
-            await websocket.receive_json()
-        except Exception:
-            pass
-
+        logger.info("Starting scan for domain=%s", domain)
         agent = ArgusAgent(settings)
+        event_count = 0
         async for event in agent.stream_scan(domain):
             await websocket.send_json(event)
+            event_count += 1
+        logger.info("Scan complete for domain=%s, events=%d", domain, event_count)
     except WebSocketDisconnect:
+        logger.warning("Client disconnected during scan for domain=%s", company_domain)
         return
     except Exception as exc:
-        await websocket.send_json({"type": "error", "data": {"message": str(exc)}})
+        logger.error("Scan error for domain=%s: %s: %s", company_domain, type(exc).__name__, exc)
+        try:
+            await websocket.send_json({"type": "error", "data": {"message": str(exc)}})
+        except Exception:
+            pass
     finally:
         try:
             await websocket.close()
