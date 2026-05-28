@@ -27,7 +27,7 @@ ARGUS/
 ## Implementation Plan
 
 1. FastAPI backend with `/health`, `/scan`, and `/ws/{company_domain}`.
-2. Bright Data intelligence layer using Bright Data MCP with Web Unlocker enabled by appending the configured `unlock` zone, plus capped SERP API collectors.
+2. Bright Data intelligence layer using Bright Data MCP with Web Unlocker enabled by appending the configured `unlocker` zone, plus capped SERP API collectors.
 3. LangGraph orchestration around an Ollama reasoning node using `chevalblanc/gpt-4o-mini`.
 4. Persistent threat memory through Cognee, with local JSONL fallback for demos without Cognee credentials.
 5. TriggerWare.ai webhook alerts for `CRITICAL` and `HIGH` findings.
@@ -36,7 +36,7 @@ ARGUS/
 ## Hackathon Compliance
 
 - Bright Data MCP: `backend/app/clients/bright_data.py` calls the configured MCP endpoint.
-- Web Unlocker: `Settings.bright_data_mcp_unlocker_url` appends `unlock=mcp_unlocker` by default, or the value from `BRIGHT_DATA_WEB_UNLOCKER_ZONE`.
+- Web Unlocker: `Settings.bright_data_mcp_unlocker_url` appends `unlocker=mcp_unlocker` by default, or the value from `BRIGHT_DATA_WEB_UNLOCKER_ZONE`.
 - SERP API: collectors call `BrightDataClient.web_search`, which attempts Bright Data MCP first and falls back to SERP API.
 - Track 3 Security & Compliance: collectors produce actionable leak, typosquatting, subdomain, cloud bucket, and exposed admin-surface findings.
 - Ollama: `backend/app/clients/ollama_client.py` uses `model="chevalblanc/gpt-4o-mini"`.

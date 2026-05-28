@@ -15,7 +15,7 @@ def test_health_reports_hackathon_integrations():
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert "unlock=mcp_unlocker" in body["bright_data"]["mcp_url"]
+    assert "unlocker=mcp_unlocker" in body["bright_data"]["mcp_url"]
     assert "llm_provider" in body
     assert "triggerware_configured" in body
 
