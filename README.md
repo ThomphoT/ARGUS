@@ -65,6 +65,20 @@ ollama pull chevalblanc/gpt-4o-mini
 
 Edit `backend/.env` with Bright Data, Cognee, TriggerWare.ai, and optional OpenAI values.
 
+### TriggerWare Manual Webhook
+
+For hackathon demos, use a manual TriggerWare webhook instead of an AI-generated trigger:
+
+1. In TriggerWare, create a trigger with type `Webhook`.
+2. Set the event name to `threat_detected`.
+3. Copy the generated webhook URL into `backend/.env`:
+
+```env
+TRIGGERWARE_WEBHOOK_URL=https://your-triggerware-webhook-url
+```
+
+ARGUS posts this event only for findings classified as `HIGH` or `CRITICAL`, so the TriggerWare workflow can immediately send Slack, email, or other notifications without adding extra risk filtering.
+
 For Bright Data MCP, install the CLI and log in locally:
 
 ```bash

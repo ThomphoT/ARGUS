@@ -25,7 +25,7 @@ class TriggerWareAlerts:
 
         payload = {
             "source": "ARGUS",
-            "event": "threat.detected",
+            "event": "threat_detected",
             "finding": finding.model_dump(mode="json"),
         }
         body = json.dumps(payload, sort_keys=True).encode("utf-8")
