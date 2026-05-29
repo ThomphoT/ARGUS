@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>ARGUS — Autonomous Reconnaissance & Guardian Unified System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1025,7 +1028,8 @@
     .tag-badge.exploit { background: rgba(255, 59, 48, 0.15); color: var(--severity-critical); }
     .tag-badge.recon { background: rgba(48, 209, 88, 0.15); color: var(--severity-low); }
 
-    #scan-btn {
+    #scan-btn,
+    #halt-exfiltration-btn {
       background: linear-gradient(135deg, #00D4FF 0%, #0077AA 100%);
       border: none;
       border-radius: 6px;
@@ -1042,7 +1046,14 @@
       position: relative;
       overflow: hidden;
     }
-    #scan-btn::after {
+    #halt-exfiltration-btn {
+      display: none;
+      margin-top: 10px;
+      background: linear-gradient(135deg, #FF3B30 0%, #8B0000 100%);
+    }
+    #halt-exfiltration-btn.visible { display: block; }
+    #scan-btn::after,
+    #halt-exfiltration-btn::after {
       content: '';
       position: absolute;
       inset: 0;
@@ -1050,9 +1061,12 @@
       transform: translateX(-100%);
       transition: transform 0.6s;
     }
-    #scan-btn:hover::after { transform: translateX(100%); }
+    #scan-btn:hover::after,
+    #halt-exfiltration-btn:hover::after { transform: translateX(100%); }
     #scan-btn:hover { box-shadow: 0 0 30px rgba(0, 212, 255, 0.5), 0 0 60px rgba(0, 212, 255, 0.1); transform: translateY(-1px); }
-    #scan-btn:active { transform: translateY(0); }
+    #halt-exfiltration-btn:hover { box-shadow: 0 0 30px rgba(255, 59, 48, 0.45), 0 0 60px rgba(255, 59, 48, 0.1); transform: translateY(-1px); }
+    #scan-btn:active,
+    #halt-exfiltration-btn:active { transform: translateY(0); }
     #scan-btn.scanning { animation: pulse-ring 1.5s ease-in-out infinite; }
 
     .input-field {
@@ -1406,6 +1420,7 @@
               <option value="social">Social Engineering</option>
             </select>
             <button id="scan-btn" type="button">INITIATE SCAN</button>
+            <button id="halt-exfiltration-btn" type="button">HALT EXFILTRATION</button>
           </div>
 
           <div class="panel" style="padding:16px;display:none;" id="risk-gauge-card">
@@ -1715,6 +1730,7 @@
     const targetInput = document.getElementById('target-input');
     const focusSelect = document.getElementById('focus-select');
     const scanBtn = document.getElementById('scan-btn');
+    const haltExfiltrationBtn = document.getElementById('halt-exfiltration-btn');
     const feedArea = document.getElementById('feed-area');
     const emptyState = document.getElementById('empty-state');
     const feedStatus = document.getElementById('feed-status');
@@ -1881,6 +1897,7 @@
       showFeedStatus('Complete', '#30D158');
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
+      haltExfiltrationBtn.classList.remove('visible');
       state.scanState = 'complete';
 
       const score = data && data.score != null ? data.score : (state.score || 0);
@@ -1911,12 +1928,36 @@
       setTimeout(function() { toast.remove(); }, 5000);
     }
 
+    const DEFAULT_BACKEND_ORIGIN = 'https://successful-nature-production-b9ae.up.railway.app';
+
+    function getBackendOrigin() {
+      var configured = window.ARGUS_BACKEND_URL || localStorage.getItem('ARGUS_BACKEND_URL') || '';
+      configured = configured.trim().replace(/\/+$/, '');
+      if (configured) return configured;
+      if (window.location.protocol === 'file:') return 'http://localhost:8000';
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return 'http://localhost:8000';
+      }
+      if (window.location.hostname.endsWith('.up.railway.app')) return window.location.origin;
+      if (window.location.hostname.endsWith('.vercel.app')) return DEFAULT_BACKEND_ORIGIN;
+      return window.location.origin;
+    }
+
+    function toWebSocketUrl(origin, company) {
+      var url = new URL(origin);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.pathname = '/ws/' + encodeURIComponent(company);
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    }
+
     function connectWS(company) {
       if (state.ws) {
         state.ws.onclose = null;
         state.ws.close();
       }
-      const url = 'ws://localhost:8000/ws/' + encodeURIComponent(company);
+      const url = toWebSocketUrl(getBackendOrigin(), company);
       let scanCompleted = false;
       state.ws = new WebSocket(url);
 
@@ -1945,7 +1986,7 @@
       };
 
       state.ws.onerror = function() {
-        showToast('Backend unreachable. Start uvicorn first.');
+        showToast('Backend unreachable. Check ARGUS_BACKEND_URL or start uvicorn locally.');
         resetToIdle();
       };
 
@@ -1961,9 +2002,37 @@
       state.scanState = 'idle';
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
+      haltExfiltrationBtn.classList.remove('visible');
       showFeedStatus('Standby', 'var(--text-secondary)');
       statusDot.style.background = 'var(--text-secondary)';
       dotSystem.className = 'dot active';
+    }
+
+    function haltExfiltration() {
+      if (state.scanState !== 'scanning') return;
+
+      state.scanState = 'halted';
+      if (state.ws) {
+        try {
+          if (state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({ type: 'halt' }));
+          }
+        } catch(e) {
+          console.warn('Unable to send halt signal:', e);
+        }
+        state.ws.onclose = null;
+        state.ws.onerror = null;
+        state.ws.close();
+        state.ws = null;
+      }
+
+      scanBtn.textContent = 'INITIATE SCAN';
+      scanBtn.classList.remove('scanning');
+      haltExfiltrationBtn.classList.remove('visible');
+      showFeedStatus('Halted', '#FF3B30');
+      statusDot.style.background = '#FF3B30';
+      dotSystem.className = 'dot active';
+      showToast('Exfiltration halted by user.');
     }
 
     function startScan(event) {
@@ -1987,6 +2056,7 @@
 
       scanBtn.textContent = 'SCANNING\u2026';
       scanBtn.classList.add('scanning');
+      haltExfiltrationBtn.classList.add('visible');
 
       resetGauge();
 
@@ -2011,6 +2081,7 @@
     });
 
     scanBtn.addEventListener('click', startScan);
+    haltExfiltrationBtn.addEventListener('click', haltExfiltration);
     targetInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') startScan(e);
     });
@@ -2026,7 +2097,7 @@
     }, 2000);
 
     console.log('ARGUS v1.0 loaded. Enter a target to begin.');
-    console.log('WebSocket will connect to ws://localhost:8000/ws/{target}');
+    console.log('WebSocket backend origin:', getBackendOrigin());
 
     // =========================================================================
     // TAB NAVIGATION
@@ -2108,7 +2179,7 @@
     // RIPPLE EFFECT
     // =========================================================================
     (function initRipple() {
-      document.querySelectorAll('.ripple-btn, #scan-btn, #attack-mode-btn').forEach(function(btn) {
+      document.querySelectorAll('.ripple-btn, #scan-btn, #halt-exfiltration-btn, #attack-mode-btn').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
           var rect = btn.getBoundingClientRect();
           var ripple = document.createElement('span');

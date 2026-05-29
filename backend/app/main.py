@@ -2,9 +2,11 @@
 
 import asyncio
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from backend.app.clients.bright_data import BrightDataClient
 from backend.app.core.config import get_settings
@@ -19,6 +21,13 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 settings = get_settings()
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+FRONTEND_DIR = PROJECT_ROOT / "frontend"
+NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
 
 app = FastAPI(
     title="ARGUS Backend Intelligence System",
@@ -55,6 +64,16 @@ async def health() -> dict:
         "cognee_enabled": settings.cognee_enabled,
         "triggerware_configured": bool(settings.triggerware_webhook_url),
     }
+
+
+@app.get("/", include_in_schema=False)
+async def frontend_index() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "index.html", headers=NO_STORE_HEADERS)
+
+
+@app.get("/ARGUS.png", include_in_schema=False)
+async def frontend_logo() -> FileResponse:
+    return FileResponse(FRONTEND_DIR / "ARGUS.png")
 
 
 @app.post("/scan")
