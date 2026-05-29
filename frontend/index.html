@@ -435,27 +435,6 @@
       align-items: center;
     }
 
-    #sidebar-toggle {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border-cyan);
-      border-radius: 4px;
-      background: transparent;
-      color: var(--text-secondary);
-      cursor: pointer;
-      transition: all 0.3s var(--transition-smooth);
-      flex-shrink: 0;
-      font-size: 16px;
-    }
-    #sidebar-toggle:hover {
-      color: var(--accent-cyan);
-      border-color: var(--accent-cyan);
-      background: rgba(0, 212, 255, 0.05);
-    }
-
     /* ============ APP LAYOUT ============ */
     #app {
       position: relative;
@@ -701,7 +680,7 @@
     #control-panel {
       width: var(--sidebar-width);
       flex-shrink: 0;
-      padding: 16px;
+      padding: 62px 16px 16px;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -712,6 +691,67 @@
       transition: all 0.4s var(--transition-smooth);
       overflow-y: auto;
       position: relative;
+    }
+
+    #scan-panel-toggle {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border-cyan);
+      border-radius: 4px;
+      background: rgba(5, 7, 11, 0.78);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.3s var(--transition-smooth);
+      flex-shrink: 0;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    #scan-panel-toggle:hover {
+      color: var(--accent-cyan);
+      border-color: var(--accent-cyan);
+      background: rgba(0, 212, 255, 0.05);
+    }
+    #scan-panel-toggle.open {
+      color: var(--accent-cyan);
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.1);
+    }
+    .panel-page-icon {
+      position: relative;
+      width: 15px;
+      height: 18px;
+      border: 1px solid currentColor;
+      border-radius: 2px;
+      display: block;
+    }
+    .panel-page-icon::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      right: -1px;
+      width: 6px;
+      height: 6px;
+      border-left: 1px solid currentColor;
+      border-bottom: 1px solid currentColor;
+      background: rgba(5, 7, 11, 0.95);
+      clip-path: polygon(0 0, 100% 100%, 0 100%);
+    }
+    .panel-page-icon::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      right: 3px;
+      top: 7px;
+      height: 1px;
+      background: currentColor;
+      box-shadow: 0 4px 0 currentColor;
+      opacity: 0.75;
     }
     #control-panel.collapsed {
       width: 0;
@@ -890,6 +930,62 @@
       font-size: 10px;
       color: var(--text-secondary);
     }
+    .finding-response-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .finding-response-item {
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 10px;
+      min-width: 0;
+    }
+    .finding-response-item.wide {
+      grid-column: 1 / -1;
+    }
+    .finding-response-label {
+      font-family: var(--font-display);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+    }
+    .finding-response-value {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .finding-response-value.muted {
+      color: var(--text-secondary);
+    }
+    .finding-priority {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-display);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .finding-priority::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 8px currentColor;
+    }
+    .priority-critical { color: var(--severity-critical); }
+    .priority-high { color: var(--severity-high); }
+    .priority-medium { color: var(--severity-medium); }
+    .priority-low { color: var(--severity-low); }
 
     .status-pill {
       display: inline-flex;
@@ -1038,6 +1134,12 @@
       border-color: var(--border-cyan-active);
       background: rgba(0, 0, 0, 0.5);
     }
+    #attack-mode-btn.active {
+      border-color: rgba(255, 59, 48, 0.75);
+      background: rgba(255, 59, 48, 0.09);
+      color: var(--severity-critical);
+      box-shadow: 0 0 18px rgba(255, 59, 48, 0.16);
+    }
 
     #feed-area {
       flex: 1;
@@ -1143,15 +1245,21 @@
         width: 100% !important;
         z-index: 100;
         transform: translateX(-100%);
-        padding: 16px !important;
+        padding: 62px 16px 16px !important;
         border-right: none !important;
       }
       #control-panel.collapsed {
         transform: translateX(-100%);
         width: 100% !important;
-        padding: 16px !important;
+        padding: 62px 16px 16px !important;
         overflow: auto !important;
       }
+      #scan-panel-toggle {
+        position: fixed;
+        top: calc(var(--nav-height) + 12px);
+        left: 12px;
+      }
+      .finding-response-grid { grid-template-columns: 1fr; }
       #control-panel:not(.collapsed) {
         transform: translateX(0);
       }
@@ -1218,17 +1326,14 @@
       <div id="nav-status">
         <div class="status-pill"><span class="dot active" id="dot-system"></span><span id="status-system">System Active</span></div>
         <div class="status-pill"><span class="dot inactive" id="dot-bd"></span><span id="status-bd">Bright Data</span></div>
-        <div class="status-pill"><span class="dot inactive" id="dot-ollama"></span><span id="status-ollama">Ollama</span></div>
         <div class="status-pill"><span class="dot inactive" id="dot-openai"></span><span id="status-openai">OpenAI</span></div>
       </div>
-      <button id="sidebar-toggle" title="Toggle Control Panel">&#x2630;</button>
     </nav>
 
     <!-- Mobile status bar -->
     <div id="nav-status-mobile">
       <div class="status-pill"><span class="dot active"></span>System Active</div>
       <div class="status-pill"><span class="dot inactive"></span>Bright Data</div>
-      <div class="status-pill"><span class="dot inactive"></span>Ollama</div>
       <div class="status-pill"><span class="dot inactive"></span>OpenAI</div>
     </div>
 
@@ -1255,7 +1360,6 @@
         <div id="home-status-bar">
           <div class="status-pill"><span class="dot active"></span> Neural Core</div>
           <div class="status-pill"><span class="dot active" id="home-dot-bd"></span> Bright Data</div>
-          <div class="status-pill"><span class="dot inactive" id="home-dot-ollama"></span> Ollama</div>
           <div class="status-pill"><span class="dot inactive" id="home-dot-openai"></span> OpenAI</div>
           <div class="status-pill"><span class="dot active"></span> Recon Ready</div>
         </div>
@@ -1290,6 +1394,7 @@
 
       <!-- ===== SCAN TAB ===== -->
       <section id="scan-tab" class="tab-panel">
+        <button id="scan-panel-toggle" class="open" title="Toggle Control Panel"><span class="panel-page-icon" aria-hidden="true"></span></button>
         <aside id="control-panel">
           <div class="panel" style="padding:16px;">
             <div class="panel-header">Target</div>
@@ -1320,7 +1425,7 @@
 
           <div class="panel" style="padding:16px;">
             <div class="panel-header">Attack Mode</div>
-            <button id="attack-mode-btn" type="button" class="ripple-btn">&#x25B6; STANDARD</button>
+            <button id="attack-mode-btn" type="button" class="ripple-btn active">ACTIVE ATTACK MODE</button>
           </div>
 
           <div class="panel" style="padding:16px;">
@@ -1603,7 +1708,7 @@
       scanState: 'idle',
       findings: [],
       ws: null,
-      attackMode: false,
+      attackMode: true,
       score: 0,
     };
 
@@ -1626,7 +1731,6 @@
     const attackModeBtn = document.getElementById('attack-mode-btn');
     const dotSystem = document.getElementById('dot-system');
     const dotBd = document.getElementById('dot-bd');
-    const dotOllama = document.getElementById('dot-ollama');
     const dotOpenai = document.getElementById('dot-openai');
 
     const circumference = 2 * Math.PI * 52;
@@ -1654,28 +1758,74 @@
     function evidenceSummary(data) {
       const evidence = data.evidence || {};
       const lines = [];
-      if (data.reasoning) lines.push('<strong>Reasoning:</strong> ' + escapeHtml(data.reasoning));
-      if (evidence.query) lines.push('<strong>Live query:</strong> ' + escapeHtml(evidence.query));
-      if (evidence.variant) lines.push('<strong>Variant:</strong> ' + escapeHtml(evidence.variant));
-      if (data.url) lines.push('<strong>Source URL:</strong> <a href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(data.url) + '</a>');
-      if (data.recommendations && data.recommendations.length) {
-        lines.push('<strong>Recommendations:</strong> ' + data.recommendations.map(escapeHtml).join('; '));
-      }
       if (evidence.serp_result) {
         lines.push('<strong>Raw result:</strong><pre>' + escapeHtml(JSON.stringify(evidence.serp_result, null, 2)) + '</pre>');
       }
-      return lines.length ? lines.join('<br>') : 'No additional evidence was returned for this finding.';
+      if (data.url) lines.push('<strong>Source URL:</strong> <a href="' + escapeHtml(data.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(data.url) + '</a>');
+      if (evidence.variant) lines.push('<strong>Variant:</strong> ' + escapeHtml(evidence.variant));
+      if (data.recommendations && data.recommendations.length) {
+        lines.push('<strong>Recommendations:</strong> ' + data.recommendations.map(escapeHtml).join('; '));
+      }
+      return lines.length ? lines.join('<br>') : 'No raw result was returned for this finding.';
     }
 
-    function defenseResponse(data) {
+    function priorityClass(severity) {
+      const s = (severity || '').toLowerCase();
+      if (s === 'critical') return 'priority-critical';
+      if (s === 'high') return 'priority-high';
+      if (s === 'medium') return 'priority-medium';
+      return 'priority-low';
+    }
+
+    function findingField(label, value, options) {
+      const opts = options || {};
+      const className = 'finding-response-item' + (opts.wide ? ' wide' : '');
+      const valueClass = 'finding-response-value' + (opts.muted ? ' muted' : '') + (opts.priority ? ' finding-priority ' + priorityClass(opts.severity) : '');
+      return '<div class="' + className + '">' +
+        '<div class="finding-response-label">' + escapeHtml(label) + '</div>' +
+        '<div class="' + valueClass + '">' + escapeHtml(value) + '</div>' +
+      '</div>';
+    }
+
+    function containmentResponse(data) {
+      const type = (data.collector || data.type || '').toLowerCase();
+      if (type.indexOf('attack') !== -1) {
+        return 'Block the simulated adversarial path, isolate exposed services, and preserve all related telemetry for validation.';
+      }
+      if (type.indexOf('domain') !== -1) {
+        return 'Lock down brand-adjacent infrastructure, review DNS ownership, and prepare takedown or allow-list decisions.';
+      }
+      if (type.indexOf('threat') !== -1) {
+        return 'Escalate the intelligence signal, verify affected assets, and start continuous monitoring for repeated mentions.';
+      }
+      return 'Halt suspicious sessions, revoke active tokens, rotate exposed credentials, and block source infrastructure tied to this finding.';
+    }
+
+    function preservationBoundary(data) {
+      const severity = (data.severity || 'LOW').toUpperCase();
+      if (severity === 'CRITICAL' || severity === 'HIGH') {
+        return 'Assume any already exposed material cannot be retrieved. Preserve remaining secrets, logs, credentials, and affected service state before remediation.';
+      }
+      return 'Preserve evidence and current service state while confirming whether the public signal maps to owned infrastructure.';
+    }
+
+    function nextAction(data) {
+      if (data.recommendations && data.recommendations.length) return data.recommendations[0];
+      return 'Isolate affected services, enable audit logging, snapshot evidence, and verify no further outbound transfer is occurring.';
+    }
+
+    function responseOverview(data) {
+      const evidence = data.evidence || {};
       const severity = (data.severity || 'LOW').toUpperCase();
       const score = data.risk_score != null ? data.risk_score : 0;
-      return [
-        '<strong>Containment response:</strong> Halt suspicious sessions, revoke active tokens, rotate exposed credentials, and block the source infrastructure tied to this finding.',
-        '<strong>Preservation boundary:</strong> If an attacker already extracted 40% of the exposed data, ARGUS cannot retrieve that data. The response objective is to preserve and secure the remaining 60%.',
-        '<strong>Priority:</strong> ' + escapeHtml(severity) + ' / score ' + escapeHtml(String(score)) + '.',
-        '<strong>Next action:</strong> Isolate affected services, enable audit logging, snapshot evidence, and verify no further outbound transfer is occurring.'
-      ].join('<br>');
+      return '<div class="finding-response-grid">' +
+        findingField('Reasoning', data.reasoning || 'No reasoning was returned for this finding.', { wide: true, muted: !data.reasoning }) +
+        findingField('Live query', evidence.query || 'No live query was returned.', { wide: true, muted: !evidence.query }) +
+        findingField('Containment response', containmentResponse(data), { wide: true }) +
+        findingField('Preservation boundary', preservationBoundary(data), { wide: true }) +
+        findingField('Priority', severity + ' / score ' + score, { priority: true, severity: severity }) +
+        findingField('Next action', nextAction(data)) +
+      '</div>';
     }
 
     function renderFinding(data) {
@@ -1700,14 +1850,12 @@
               <span style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">` + escapeHtml(sev) + `</span>
             </div>
             <div style="font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:2px;">` + escapeHtml(title) + `</div>
-            ` + (data.description ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:4px;">` + escapeHtml(data.description) + `</div>` : '') + `
             ` + (source ? `<div style="font-size:10px;color:var(--text-secondary);opacity:0.6;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">` + escapeHtml(source) + `</div>` : '') + `
+            <div id="` + responseId + `">` + responseOverview(data) + `</div>
             <div class="finding-actions">
               <button class="finding-action-btn" type="button" data-target="` + detailId + `">Read more</button>
-              <button class="finding-action-btn danger" type="button" data-target="` + responseId + `">Halt exfiltration</button>
             </div>
             <div class="finding-detail" id="` + detailId + `">` + evidenceSummary(data) + `</div>
-            <div class="finding-detail" id="` + responseId + `">` + defenseResponse(data) + `</div>
           </div>
           <div style="font-size:10px;color:var(--text-secondary);opacity:0.5;font-family:var(--font-mono);white-space:nowrap;flex-shrink:0;">` + new Date(ts).toLocaleTimeString() + `</div>
         </div>
@@ -1854,15 +2002,11 @@
     attackModeBtn.addEventListener('click', function() {
       state.attackMode = !state.attackMode;
       if (state.attackMode) {
-        attackModeBtn.style.borderColor = '#FF3B30';
-        attackModeBtn.style.color = '#FF3B30';
-        attackModeBtn.style.boxShadow = '0 0 16px rgba(255,59,48,0.2)';
-        attackModeBtn.innerHTML = '\u26A0 ATTACK SIM ACTIVE';
+        attackModeBtn.classList.add('active');
+        attackModeBtn.innerHTML = 'ACTIVE ATTACK MODE';
       } else {
-        attackModeBtn.style.borderColor = '';
-        attackModeBtn.style.color = '';
-        attackModeBtn.style.boxShadow = '';
-        attackModeBtn.innerHTML = '\u25B6 STANDARD';
+        attackModeBtn.classList.remove('active');
+        attackModeBtn.innerHTML = 'STANDARD MODE';
       }
     });
 
@@ -1872,15 +2016,12 @@
     });
 
     setTimeout(function() {
-      dotOllama.className = 'dot inactive';
       dotBd.className = 'dot active';
       dotOpenai.className = 'dot active';
       // Sync home dots
       var homeBd = document.getElementById('home-dot-bd');
-      var homeOllama = document.getElementById('home-dot-ollama');
       var homeOpenai = document.getElementById('home-dot-openai');
       if (homeBd) homeBd.className = 'dot active';
-      if (homeOllama) homeOllama.className = 'dot inactive';
       if (homeOpenai) homeOpenai.className = 'dot active';
     }, 2000);
 
@@ -1933,20 +2074,22 @@
     // SIDEBAR TOGGLE
     // =========================================================================
     (function initSidebar() {
-      var toggle = document.getElementById('sidebar-toggle');
+      var toggle = document.getElementById('scan-panel-toggle');
       var panel = document.getElementById('control-panel');
       var collapsed = false;
 
       toggle.addEventListener('click', function() {
         collapsed = !collapsed;
         panel.classList.toggle('collapsed', collapsed);
-        toggle.textContent = collapsed ? '\u2630' : '\u2715';
+        toggle.classList.toggle('open', !collapsed);
         toggle.style.color = collapsed ? 'var(--text-secondary)' : 'var(--accent-cyan)';
       });
 
       // Collapse by default on mobile
       if (window.innerWidth <= 768) {
         panel.classList.add('collapsed');
+        collapsed = true;
+        toggle.classList.remove('open');
       }
 
       window.addEventListener('resize', function() {
@@ -1954,7 +2097,7 @@
           if (!panel.classList.contains('collapsed') && !collapsed) {
             collapsed = true;
             panel.classList.add('collapsed');
-            toggle.textContent = '\u2630';
+            toggle.classList.remove('open');
             toggle.style.color = 'var(--text-secondary)';
           }
         }
