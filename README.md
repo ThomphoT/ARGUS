@@ -44,6 +44,7 @@ ARGUS/
 - LangGraph: `backend/app/services/reasoning.py` builds a `StateGraph` for risk classification.
 - Cognee: `backend/app/services/memory.py` stores structured findings after every scan when available.
 - TriggerWare.ai: `backend/app/services/alerts.py` sends webhook alerts for high-impact threats.
+- Defense webhook: `backend/app/services/remediation.py` sends halt-exfiltration containment payloads to a configured SOAR, firewall, or EDR playbook.
 - License: MIT License is included in `LICENSE`.
 
 ## Setup
@@ -129,8 +130,11 @@ Key variables are documented in `.env.example`.
 - `OLLAMA_HOST`
 - `COGNEE_ENABLED`
 - `TRIGGERWARE_WEBHOOK_URL`
+- `DEFENSE_WEBHOOK_URL`
+- `DEFENSE_WEBHOOK_SECRET`
 
 When Bright Data credentials are not configured, ARGUS returns deterministic demo findings so the API and frontend remain testable.
+When `DEFENSE_WEBHOOK_URL` is configured, pressing `HALT EXFILTRATION` sends a signed containment request if `DEFENSE_WEBHOOK_SECRET` is also set. Without it, ARGUS still cancels the active scan and generates the recovered-data report for manual response.
 
 ## Collector Test Runner
 
@@ -151,3 +155,4 @@ Use this after configuring `BRIGHT_DATA_SERP_ZONE` to confirm collectors are usi
 - `LLM_PROVIDER=ollama` with local Ollama running, or `LLM_PROVIDER=openai` with a non-rate-limited key.
 - `COGNEE_ENABLED=true` if using Cognee persistent memory.
 - `TRIGGERWARE_WEBHOOK_URL` is set if showing automated alerts.
+- `DEFENSE_WEBHOOK_URL` points to the containment playbook if showing real attack blocking.

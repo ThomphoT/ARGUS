@@ -1,5 +1,7 @@
 """Tests for backend API and WebSocket scan contracts."""
 
+import asyncio
+
 from fastapi.testclient import TestClient
 
 from backend.app.main import app
@@ -94,3 +96,71 @@ def test_websocket_scan_reports_invalid_domain():
 
     assert error["type"] == "error"
     assert "valid domain" in error["data"]["message"]
+
+
+def test_websocket_halt_returns_remediation_report(monkeypatch):
+    class FakeAgent:
+        def __init__(self, settings):
+            self.settings = settings
+
+        async def stream_scan(self, domain, focus, attack_mode):
+            yield {
+                "type": "finding",
+                "data": {
+                    "company_domain": domain,
+                    "severity": "HIGH",
+                    "risk_score": 80,
+                    "title": "Suspicious exfiltration signal from 203.0.113.10",
+                    "description": "Possible attacker node observed near Johannesburg",
+                    "type": "attack_simulator",
+                    "evidence": {"country": "South Africa"},
+                },
+            }
+            await asyncio.sleep(10)
+
+    monkeypatch.setattr("backend.app.main.ArgusAgent", FakeAgent)
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/Example.com") as websocket:
+        websocket.send_json({"focus": "attack", "attack_mode": True})
+        finding = websocket.receive_json()
+        websocket.send_json({"type": "halt"})
+        report = websocket.receive_json()
+
+    assert finding["type"] == "finding"
+    assert report["type"] == "remediation_report"
+    assert report["data"]["containment_status"] == "pending_configuration"
+    assert report["data"]["attacker"]["ip"] == "203.0.113.10"
+    assert report["data"]["attacker"]["location"] == "South Africa"
+    assert report["data"]["summary"]["records_recovered"] == 1
+
+
+def test_websocket_stop_cancels_scan_without_remediation(monkeypatch):
+    class FakeAgent:
+        def __init__(self, settings):
+            self.settings = settings
+
+        async def stream_scan(self, domain, focus, attack_mode):
+            yield {
+                "type": "finding",
+                "data": {
+                    "company_domain": domain,
+                    "severity": "LOW",
+                    "title": "Cancelable finding",
+                    "type": "leak_scanner",
+                },
+            }
+            await asyncio.sleep(10)
+
+    monkeypatch.setattr("backend.app.main.ArgusAgent", FakeAgent)
+    client = TestClient(app)
+
+    with client.websocket_connect("/ws/Example.com") as websocket:
+        websocket.send_json({"focus": "full", "attack_mode": False})
+        finding = websocket.receive_json()
+        websocket.send_json({"type": "stop"})
+        stopped = websocket.receive_json()
+
+    assert finding["type"] == "finding"
+    assert stopped["type"] == "stopped"
+    assert stopped["data"]["message"] == "Scan stopped by user."

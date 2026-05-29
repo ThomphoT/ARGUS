@@ -1,7 +1,9 @@
 """FastAPI entry point for the ARGUS backend intelligence system."""
 
 import asyncio
+import contextlib
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -12,6 +14,7 @@ from backend.app.clients.bright_data import BrightDataClient
 from backend.app.core.config import get_settings
 from backend.app.models import ScanRequest
 from backend.app.services.agent import ArgusAgent
+from backend.app.services.remediation import RemediationAgent
 from backend.app.utils.domain import normalize_domain
 
 logger = logging.getLogger("argus")
@@ -119,12 +122,81 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
             attack_mode,
         )
         agent = ArgusAgent(settings)
+        remediation_agent = RemediationAgent(settings)
         event_count = 0
-        async for event in agent.stream_scan(domain, focus, attack_mode):
-            await websocket.send_json(event)
-            event_count += 1
-            if event.get("type") == "complete":
-                scan_completed = True
+        findings = []
+        queue: asyncio.Queue[dict] = asyncio.Queue()
+        scan_task = asyncio.create_task(
+            _stream_scan_events(agent, domain, focus, attack_mode, queue)
+        )
+        queue_task = asyncio.create_task(queue.get())
+        receive_task = asyncio.create_task(websocket.receive_json())
+
+        try:
+            while True:
+                done, pending = await asyncio.wait(
+                    {queue_task, receive_task},
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                if receive_task in done:
+                    payload = receive_task.result()
+                    if payload.get("type") == "stop":
+                        logger.info("Stop requested for domain=%s", domain)
+                        if not scan_task.done():
+                            scan_task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await scan_task
+                        await websocket.send_json(
+                            {
+                                "type": "stopped",
+                                "data": {
+                                    "company_domain": domain,
+                                    "stopped_at": datetime.now(timezone.utc).isoformat(),
+                                    "message": "Scan stopped by user.",
+                                },
+                            }
+                        )
+                        scan_completed = True
+                        break
+                    if payload.get("type") == "halt":
+                        logger.info("Halt requested for domain=%s", domain)
+                        if not scan_task.done():
+                            scan_task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await scan_task
+                        report = await remediation_agent.halt_exfiltration(
+                            domain, findings
+                        )
+                        await websocket.send_json(
+                            {"type": "remediation_report", "data": report}
+                        )
+                        scan_completed = True
+                        break
+                    receive_task = asyncio.create_task(websocket.receive_json())
+
+                if queue_task in done:
+                    event = queue_task.result()
+                    if event.get("type") == "_scan_finished":
+                        break
+                    await websocket.send_json(event)
+                    event_count += 1
+                    if event.get("type") == "finding":
+                        findings.append(event.get("data") or {})
+                    if event.get("type") == "complete":
+                        scan_completed = True
+                        break
+                    queue_task = asyncio.create_task(queue.get())
+
+                for task in pending:
+                    if task.done():
+                        task.result()
+        finally:
+            for task in (queue_task, receive_task, scan_task):
+                if not task.done():
+                    task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await scan_task
         logger.info("Scan complete for domain=%s, events=%d", domain, event_count)
     except WebSocketDisconnect:
         if scan_completed:
@@ -153,3 +225,22 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
             await websocket.close()
         except Exception:
             pass
+
+
+async def _stream_scan_events(
+    agent: ArgusAgent,
+    domain: str,
+    focus: str,
+    attack_mode: bool,
+    queue: asyncio.Queue[dict],
+) -> None:
+    try:
+        async for event in agent.stream_scan(domain, focus, attack_mode):
+            await queue.put(event)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.error("Scan producer failed for domain=%s: %s", domain, exc)
+        await queue.put({"type": "error", "data": {"message": str(exc)}})
+    finally:
+        await queue.put({"type": "_scan_finished"})

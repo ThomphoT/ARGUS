@@ -48,6 +48,8 @@ class Settings(BaseSettings):
 
     triggerware_webhook_url: str = ""
     triggerware_secret: str = ""
+    defense_webhook_url: str = ""
+    defense_webhook_secret: str = ""
 
     model_config = SettingsConfigDict(
         env_file=("backend/.env", ".env"),

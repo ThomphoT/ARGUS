@@ -907,6 +907,10 @@
       background: rgba(255, 59, 48, 0.08);
       color: var(--severity-critical);
     }
+    .finding-action-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
     .finding-detail {
       display: none;
       margin-top: 10px;
@@ -1293,6 +1297,126 @@
     }
 
     #nav-status-mobile { display: none; }
+
+    #remediation-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, 0.72);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    #remediation-modal.visible { display: flex; }
+    #remediation-panel {
+      width: min(920px, 100%);
+      max-height: min(760px, 92vh);
+      overflow: auto;
+      border: 1px solid rgba(0, 212, 255, 0.35);
+      border-radius: 6px;
+      background: rgba(5, 7, 11, 0.96);
+      box-shadow: 0 0 48px rgba(0, 212, 255, 0.14);
+    }
+    #remediation-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 20px 22px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #remediation-title {
+      font-family: var(--font-display);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text-primary);
+      text-transform: uppercase;
+    }
+    #remediation-subtitle {
+      margin-top: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    #remediation-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+    #remediation-body {
+      padding: 20px 22px 24px;
+      display: grid;
+      gap: 16px;
+    }
+    .remediation-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .remediation-metric,
+    .recovered-record {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.035);
+      padding: 12px;
+    }
+    .remediation-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--text-secondary);
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+    .remediation-value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-primary);
+      overflow-wrap: anywhere;
+    }
+    .remediation-section-title {
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+    }
+    .remediation-list {
+      display: grid;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .recovered-record {
+      display: grid;
+      gap: 6px;
+    }
+    .recovered-title {
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    .recovered-meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-secondary);
+      overflow-wrap: anywhere;
+    }
+    @media (max-width: 720px) {
+      .remediation-grid { grid-template-columns: 1fr; }
+      #remediation-modal { padding: 12px; }
+    }
   </style>
 </head>
 <body>
@@ -1420,7 +1544,7 @@
               <option value="social">Social Engineering</option>
             </select>
             <button id="scan-btn" type="button">INITIATE SCAN</button>
-            <button id="halt-exfiltration-btn" type="button">HALT EXFILTRATION</button>
+            <button id="halt-exfiltration-btn" type="button">STOP SCAN</button>
           </div>
 
           <div class="panel" style="padding:16px;display:none;" id="risk-gauge-card">
@@ -1490,6 +1614,19 @@
         <div style="flex:1;min-width:200px;border-left:1px solid rgba(255,255,255,0.08);padding-left:24px;">
           <div id="threat-recs" style="font-size:12px;color:var(--text-secondary);display:flex;flex-direction:column;gap:4px;"></div>
         </div>
+      </div>
+    </div>
+
+    <div id="remediation-modal" role="dialog" aria-modal="true" aria-labelledby="remediation-title">
+      <div id="remediation-panel">
+        <div id="remediation-head">
+          <div>
+            <div id="remediation-title">Containment Report</div>
+            <div id="remediation-subtitle">ARGUS remediation agent response</div>
+          </div>
+          <button id="remediation-close" type="button" aria-label="Close containment report">X</button>
+        </div>
+        <div id="remediation-body"></div>
       </div>
     </div>
   </div>
@@ -1748,6 +1885,9 @@
     const dotSystem = document.getElementById('dot-system');
     const dotBd = document.getElementById('dot-bd');
     const dotOpenai = document.getElementById('dot-openai');
+    const remediationModal = document.getElementById('remediation-modal');
+    const remediationBody = document.getElementById('remediation-body');
+    const remediationClose = document.getElementById('remediation-close');
 
     const circumference = 2 * Math.PI * 52;
 
@@ -1870,6 +2010,7 @@
             <div id="` + responseId + `">` + responseOverview(data) + `</div>
             <div class="finding-actions">
               <button class="finding-action-btn" type="button" data-target="` + detailId + `">Read more</button>
+              <button class="finding-action-btn danger finding-halt-btn" type="button">Halt exfiltration</button>
             </div>
             <div class="finding-detail" id="` + detailId + `">` + evidenceSummary(data) + `</div>
           </div>
@@ -1878,6 +2019,11 @@
       `;
       card.querySelectorAll('.finding-action-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
+          if (btn.classList.contains('finding-halt-btn')) {
+            haltExfiltration();
+            updateFindingHaltButtons();
+            return;
+          }
           const target = card.querySelector('#' + btn.getAttribute('data-target'));
           if (!target) return;
           target.classList.toggle('open');
@@ -1886,6 +2032,14 @@
       feedArea.insertBefore(card, feedArea.firstChild);
       state.findings.push(data);
       findingCount.textContent = '[' + state.findings.length + ' findings]';
+      updateFindingHaltButtons();
+    }
+
+    function updateFindingHaltButtons() {
+      const disabled = state.scanState !== 'scanning';
+      document.querySelectorAll('.finding-halt-btn').forEach(function(btn) {
+        btn.disabled = disabled;
+      });
     }
 
     function showFeedStatus(text, color) {
@@ -1899,6 +2053,7 @@
       scanBtn.classList.remove('scanning');
       haltExfiltrationBtn.classList.remove('visible');
       state.scanState = 'complete';
+      updateFindingHaltButtons();
 
       const score = data && data.score != null ? data.score : (state.score || 0);
       updateGauge(score);
@@ -1916,6 +2071,65 @@
         const detail = status.mcp_last_error || status.serp_last_error || 'Live collectors completed without returning public findings.';
         threatRecs.innerHTML += '<div style="margin-top:8px;color:var(--text-secondary);font-size:11px;">Live data status: ' + escapeHtml(detail) + '</div>';
       }
+    }
+
+    function renderRemediationReport(data) {
+      const attacker = data.attacker || {};
+      const defense = data.defense_system || {};
+      const summary = data.summary || {};
+      const recovered = Array.isArray(data.recovered_data) ? data.recovered_data : [];
+      const actions = Array.isArray(data.actions) ? data.actions : [];
+      const status = data.containment_status || 'unknown';
+      const statusText = status === 'blocked' ? 'Attack blocked' : 'Defense pending';
+      const attackerIp = attacker.ip || 'Not available';
+      const attackerLocation = attacker.location || 'Not available';
+
+      remediationBody.innerHTML =
+        '<div class="remediation-grid">' +
+          remediationMetric('Incident', data.incident_id || 'ARGUS') +
+          remediationMetric('Containment', statusText) +
+          remediationMetric('Recovered records', String(summary.records_recovered || recovered.length || 0)) +
+          remediationMetric('Attacker IP', attackerIp) +
+          remediationMetric('Location', attackerLocation) +
+          remediationMetric('Defense system', defense.connected ? 'Connected' : 'Not configured') +
+        '</div>' +
+        '<div>' +
+          '<div class="remediation-section-title">Actions Taken</div>' +
+          '<div class="remediation-list">' + actions.map(function(item) {
+            return '<div>&#x2022; ' + escapeHtml(item) + '</div>';
+          }).join('') + '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div class="remediation-section-title">Recovered Data</div>' +
+          '<div class="remediation-list">' + (recovered.length ? recovered.map(renderRecoveredRecord).join('') : '<div>No recoverable data was collected before the halt request.</div>') + '</div>' +
+        '</div>' +
+        '<div class="remediation-metric">' +
+          '<div class="remediation-label">Defense Response</div>' +
+          '<div class="remediation-value">' + escapeHtml(defense.message || 'No response details available.') + '</div>' +
+        '</div>';
+
+      remediationModal.classList.add('visible');
+      showFeedStatus(statusText, status === 'blocked' ? '#30D158' : '#FFD60A');
+      statusDot.style.background = status === 'blocked' ? '#30D158' : '#FFD60A';
+      scanBtn.textContent = 'INITIATE SCAN';
+      scanBtn.classList.remove('scanning');
+      haltExfiltrationBtn.classList.remove('visible');
+      state.scanState = 'halted';
+      updateFindingHaltButtons();
+      showToast(statusText + '. Report generated.');
+    }
+
+    function remediationMetric(label, value) {
+      return '<div class="remediation-metric"><div class="remediation-label">' + escapeHtml(label) + '</div><div class="remediation-value">' + escapeHtml(value) + '</div></div>';
+    }
+
+    function renderRecoveredRecord(record) {
+      return '<div class="recovered-record">' +
+        '<div class="recovered-title">' + escapeHtml(record.title || 'Recovered evidence') + '</div>' +
+        '<div class="recovered-meta">' + escapeHtml((record.severity || 'UNKNOWN') + ' / score ' + (record.risk_score || 0) + ' / ' + (record.type || 'finding')) + '</div>' +
+        (record.url ? '<div class="recovered-meta">' + escapeHtml(record.url) + '</div>' : '') +
+        (record.description ? '<div class="recovered-meta">' + escapeHtml(record.description) + '</div>' : '') +
+      '</div>';
     }
 
     function showToast(msg) {
@@ -1976,6 +2190,12 @@
           } else if (data.type === 'complete') {
             scanCompleted = true;
             renderComplete(data.data || data);
+          } else if (data.type === 'remediation_report') {
+            scanCompleted = true;
+            renderRemediationReport(data.data || data);
+          } else if (data.type === 'stopped') {
+            scanCompleted = true;
+            renderScanStopped(data.data || data);
           } else if (data.type === 'error') {
             showToast('Scan error: ' + (data.data && data.data.message ? data.data.message : 'Unknown'));
             resetToIdle();
@@ -2003,15 +2223,52 @@
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
       haltExfiltrationBtn.classList.remove('visible');
+      updateFindingHaltButtons();
       showFeedStatus('Standby', 'var(--text-secondary)');
       statusDot.style.background = 'var(--text-secondary)';
       dotSystem.className = 'dot active';
     }
 
+    function renderScanStopped(data) {
+      state.scanState = 'stopped';
+      scanBtn.textContent = 'INITIATE SCAN';
+      scanBtn.classList.remove('scanning');
+      haltExfiltrationBtn.classList.remove('visible');
+      updateFindingHaltButtons();
+      showFeedStatus('Stopped', '#FF3B30');
+      statusDot.style.background = '#FF3B30';
+      dotSystem.className = 'dot active';
+      showToast((data && data.message) || 'Scan stopped by user.');
+    }
+
+    function stopScan() {
+      if (state.scanState !== 'scanning') return;
+
+      state.scanState = 'stopping';
+      updateFindingHaltButtons();
+      if (state.ws) {
+        try {
+          if (state.ws.readyState === WebSocket.OPEN) {
+            state.ws.send(JSON.stringify({ type: 'stop' }));
+          }
+        } catch(e) {
+          console.warn('Unable to send stop signal:', e);
+        }
+      }
+
+      scanBtn.textContent = 'STOPPING...';
+      haltExfiltrationBtn.classList.remove('visible');
+      showFeedStatus('Stopping scan...', '#FFD60A');
+      statusDot.style.background = '#FFD60A';
+      dotSystem.className = 'dot active';
+      showToast('Stop signal sent. Cancelling scan.');
+    }
+
     function haltExfiltration() {
       if (state.scanState !== 'scanning') return;
 
-      state.scanState = 'halted';
+      state.scanState = 'halting';
+      updateFindingHaltButtons();
       if (state.ws) {
         try {
           if (state.ws.readyState === WebSocket.OPEN) {
@@ -2020,19 +2277,14 @@
         } catch(e) {
           console.warn('Unable to send halt signal:', e);
         }
-        state.ws.onclose = null;
-        state.ws.onerror = null;
-        state.ws.close();
-        state.ws = null;
       }
 
-      scanBtn.textContent = 'INITIATE SCAN';
-      scanBtn.classList.remove('scanning');
+      scanBtn.textContent = 'DEPLOYING AGENT...';
       haltExfiltrationBtn.classList.remove('visible');
-      showFeedStatus('Halted', '#FF3B30');
-      statusDot.style.background = '#FF3B30';
+      showFeedStatus('Deploying containment agent...', '#FFD60A');
+      statusDot.style.background = '#FFD60A';
       dotSystem.className = 'dot active';
-      showToast('Exfiltration halted by user.');
+      showToast('Halt signal sent. ARGUS remediation agent deploying.');
     }
 
     function startScan(event) {
@@ -2081,7 +2333,13 @@
     });
 
     scanBtn.addEventListener('click', startScan);
-    haltExfiltrationBtn.addEventListener('click', haltExfiltration);
+    haltExfiltrationBtn.addEventListener('click', stopScan);
+    remediationClose.addEventListener('click', function() {
+      remediationModal.classList.remove('visible');
+    });
+    remediationModal.addEventListener('click', function(e) {
+      if (e.target === remediationModal) remediationModal.classList.remove('visible');
+    });
     targetInput.addEventListener('keydown', function(e) {
       if (e.key === 'Enter') startScan(e);
     });
