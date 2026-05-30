@@ -84,7 +84,7 @@ def test_mcp_url_uses_configured_unlocker_zone(test_settings):
     configured = test_settings.model_copy(update={"bright_data_api_token": "abc"})
 
     assert configured.bright_data_mcp_unlocker_url == (
-        "https://mcp.brightdata.com/mcp?unlock=1&token=abc&unlocker=mcp_unlocker&pro=1"
+        "https://mcp.brightdata.com/mcp?token=abc&unlocker=mcp_unlocker&pro=1"
     )
 
 
@@ -96,7 +96,7 @@ def test_mcp_url_replaces_legacy_unlock_flag(test_settings):
         }
     )
 
-    assert "unlock=1" in configured.bright_data_mcp_unlocker_url
+    assert "unlock=1" not in configured.bright_data_mcp_unlocker_url
     assert "unlocker=mcp_unlocker" in configured.bright_data_mcp_unlocker_url
 
 
@@ -109,7 +109,6 @@ def test_mcp_url_replaces_unlock_param_with_unlocker_zone(test_settings):
     )
 
     assert "unlock=old" not in configured.bright_data_mcp_unlocker_url
-    assert "unlock=1" in configured.bright_data_mcp_unlocker_url
     assert "unlocker=mcp_unlocker" in configured.bright_data_mcp_unlocker_url
 
 
@@ -121,5 +120,5 @@ def test_unlocker_url_strips_shell_quotes(test_settings):
     )
 
     assert configured.bright_data_mcp_unlocker_url == (
-        "https://mcp.brightdata.com/mcp?token=abc&pro=1&unlock=1&unlocker=mcp_unlocker"
+        "https://mcp.brightdata.com/mcp?token=abc&pro=1&unlocker=mcp_unlocker"
     )

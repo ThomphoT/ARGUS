@@ -14,8 +14,6 @@ class LeakScanner(BaseCollector):
             f'site:{company_domain} ext:env "API_KEY"',
             f'"{company_domain}" ".env" "SECRET_KEY"',
             f'"{company_domain}" "BEGIN PRIVATE KEY"',
-            f'"{company_domain}" "password" "config"',
-            f'"{company_domain}" "token" "github"',
         ][: self.bright_data.settings.max_serp_queries]
 
         for query in queries:

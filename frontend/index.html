@@ -174,12 +174,7 @@
       position: fixed;
       inset: 0;
       z-index: 99999;
-      background:
-        linear-gradient(rgba(0, 212, 255, 0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0, 212, 255, 0.035) 1px, transparent 1px),
-        radial-gradient(ellipse at center, rgba(0, 212, 255, 0.07), transparent 58%),
-        #05070B;
-      background-size: 36px 36px, 36px 36px, auto, auto;
+      background: #05070B;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -194,7 +189,9 @@
     }
 
     #loading-canvas {
-      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 0;
     }
 
     #loading-logo-container {
@@ -203,23 +200,23 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 16px;
-      width: min(720px, calc(100vw - 32px));
-      padding: 28px;
-      border: 1px solid rgba(200, 208, 218, 0.16);
-      border-radius: 4px;
-      background: rgba(5, 7, 11, 0.82);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      gap: 24px;
     }
 
     #loading-logo-img {
       width: 120px;
       height: auto;
-      opacity: 0.9;
-      mix-blend-mode: screen;
-      filter: drop-shadow(0 0 18px rgba(0, 255, 255, 0.45));
-      animation: logo-pulse 2.8s ease-in-out infinite;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: opacity 0.8s ease, transform 0.8s var(--transition-smooth);
+      filter: drop-shadow(0 0 30px rgba(0, 212, 255, 0.3));
+    }
+    #loading-logo-img.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+    #loading-logo-img.pulse {
+      animation: logo-pulse 1.5s ease-in-out infinite;
     }
 
     @keyframes logo-pulse {
@@ -229,47 +226,58 @@
 
     #loading-title {
       font-family: var(--font-display);
-      font-size: 52px;
+      font-size: 72px;
       font-weight: 700;
       letter-spacing: 12px;
       color: var(--accent-metallic);
       position: relative;
+      opacity: 0;
+      transform: scale(1.2);
+      transition: opacity 0.6s ease, transform 0.6s var(--transition-smooth);
       text-shadow: 0 0 40px rgba(0, 212, 255, 0.2);
+    }
+    #loading-title.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+    #loading-title.melting {
+      color: transparent;
+      background: linear-gradient(180deg, var(--accent-cyan) 0%, rgba(0, 212, 255, 0.3) 50%, transparent 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      filter: blur(1px);
+      transform: scale(1.1) translateY(-10px);
+      transition: all 0.8s var(--transition-smooth);
+    }
+
+    @keyframes melt-disintegrate {
+      0% { transform: scale(1) translateY(0); opacity: 1; filter: blur(0); }
+      50% { transform: scale(1.15) translateY(-20px); opacity: 0.6; filter: blur(3px); }
+      100% { transform: scale(0.8) translateY(60px); opacity: 0; filter: blur(8px); }
     }
 
     #loading-subtitle {
       font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 4px;
-      color: var(--accent-cyan);
-      opacity: 0.9;
+      font-size: 11px;
+      letter-spacing: 6px;
+      color: var(--text-secondary);
+      opacity: 0;
+      transition: opacity 0.6s ease;
       text-transform: uppercase;
     }
-    #loading-log {
-      width: 100%;
-      height: 128px;
-      padding: 12px 14px;
-      overflow: hidden;
-      border: 1px solid rgba(200, 208, 218, 0.12);
-      background: rgba(0, 0, 0, 0.34);
-      color: rgba(231, 237, 245, 0.72);
-      font-family: var(--font-mono);
-      font-size: 10px;
-      line-height: 1.75;
-      text-align: left;
-    }
-    .boot-log-line {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.025);
-    }
-    .boot-log-line span:last-child { color: var(--accent-cyan); }
+    #loading-subtitle.visible { opacity: 0.6; }
 
     #loading-bar-wrap {
-      width: 100%;
+      position: absolute;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
       z-index: 1;
+      opacity: 0;
+      transition: opacity 0.5s ease;
     }
+    #loading-bar-wrap.visible { opacity: 1; }
 
     #loading-bar-track {
       width: 100%;
@@ -357,9 +365,7 @@
     #nav-brand-img {
       height: 28px;
       width: auto;
-      opacity: 0.9;
-      mix-blend-mode: screen;
-      filter: drop-shadow(0 0 5px rgba(0, 255, 255, 0.5));
+      filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.3));
     }
     #nav-brand-text {
       font-family: var(--font-display);
@@ -772,9 +778,9 @@
     .panel {
       background: var(--surface);
       background-image: linear-gradient(135deg, var(--panel-glass), transparent);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(200, 208, 218, 0.16);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-metallic);
       border-left: 1px solid rgba(0, 212, 255, 0.08);
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), var(--shadow-glow);
       border-radius: var(--panel-radius);
@@ -808,9 +814,9 @@
     .finding-card {
       background: var(--surface);
       background-image: linear-gradient(135deg, var(--panel-glass), transparent);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(200, 208, 218, 0.16);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid var(--border-metallic);
       border-left: 3px solid var(--severity-low);
       border-radius: 6px;
       animation: slide-in 0.3s ease-out;
@@ -818,24 +824,6 @@
       cursor: default;
       position: relative;
       overflow: hidden;
-    }
-    .agent-step-card {
-      border: 1px solid rgba(0, 212, 255, 0.16);
-      border-radius: 4px;
-      background: rgba(0, 212, 255, 0.045);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      padding: 10px 12px;
-      color: var(--text-secondary);
-      font-family: var(--font-mono);
-      font-size: 11px;
-      animation: slide-in 0.25s ease-out;
-    }
-    .agent-step-card strong {
-      color: var(--accent-cyan);
-      font-family: var(--font-display);
-      letter-spacing: 1px;
-      text-transform: uppercase;
     }
     .finding-card::before {
       content: '';
@@ -1438,20 +1426,24 @@
     <div id="loading-logo-container">
       <div id="loading-title">ARGUS</div>
       <img id="loading-logo-img" src="ARGUS.png" alt="ARGUS">
-      <div id="loading-subtitle">v1.0 - NEURAL INTERFACE INITIALIZING...</div>
-      <div id="loading-log" aria-live="polite"></div>
-      <div id="loading-bar-wrap">
-        <div id="loading-bar-track">
-          <div id="loading-bar-fill"></div>
-        </div>
-        <div id="loading-bar-percent">Bright Data stack checks pending</div>
-      </div>
+      <div id="loading-subtitle">Initializing System</div>
     </div>
-    <div id="loading-version">v1.0 - NEURAL INTERFACE</div>
+    <div id="loading-bar-wrap">
+      <div id="loading-bar-track">
+        <div id="loading-bar-fill"></div>
+      </div>
+      <div id="loading-bar-percent">0%</div>
+    </div>
+    <div id="loading-version">v1.0 — NEURAL INTERFACE</div>
   </div>
 
   <!-- ============ BACKGROUND ============ -->
   <div id="bg-grid"></div>
+  <div class="orb" style="width:500px;height:500px;top:-100px;left:-100px;animation:drift1 20s ease-in-out infinite;animation-delay:0s;"></div>
+  <div class="orb" style="width:400px;height:400px;bottom:10%;right:5%;animation:drift2 25s ease-in-out infinite;animation-delay:2s;"></div>
+  <div class="orb" style="width:350px;height:350px;top:40%;left:30%;animation:drift3 18s ease-in-out infinite;animation-delay:4s;"></div>
+  <div class="orb" style="width:300px;height:300px;top:60%;right:40%;animation:drift1 22s ease-in-out infinite;animation-delay:6s;"></div>
+  <div class="orb" style="width:450px;height:450px;bottom:-80px;left:50%;animation:drift2 28s ease-in-out infinite;animation-delay:8s;"></div>
 
   <!-- ============ APP ============ -->
   <div id="app">
@@ -1644,40 +1636,129 @@
     // LOADING SCREEN
     // =========================================================================
     (function initLoadingScreen() {
-      const loadingScreen = document.getElementById('loading-screen');
-      const log = document.getElementById('loading-log');
-      const bar = document.getElementById('loading-bar-fill');
-      const status = document.getElementById('loading-bar-percent');
-      const checks = [
-        ['[SYS] Bright Data MCP', 'CONNECTION ESTABLISHED'],
-        ['[SYS] Web Unlocker', 'ACTIVE'],
-        ['[SYS] SERP API', 'SEARCH SIGNALS READY'],
-        ['[SYS] Cognee Memory', 'DIFF INTELLIGENCE ONLINE'],
-        ['[SYS] TriggerWare', 'DEFENSE WORKFLOW ARMED'],
-        ['[SYS] Neural Interface', 'SYSTEM ACTIVE']
-      ];
-      let index = 0;
+      const canvas = document.getElementById('loading-canvas');
+      const ctx = canvas.getContext('2d');
+      let W, H;
+      let particles = [];
+      let phase = 1;
+      let startTime = Date.now();
+      let logoVisible = false;
+      let titleVisible = false;
+      let loadingProgress = 0;
+      let barElement = document.getElementById('loading-bar-fill');
+      let percentElement = document.getElementById('loading-bar-percent');
+      let barWrap = document.getElementById('loading-bar-wrap');
+      let loadingTitle = document.getElementById('loading-title');
+      let loadingLogo = document.getElementById('loading-logo-img');
+      let loadingSubtitle = document.getElementById('loading-subtitle');
+      let loadingScreen = document.getElementById('loading-screen');
 
-      function appendLine() {
-        if (!log || index >= checks.length) return;
-        const line = document.createElement('div');
-        line.className = 'boot-log-line';
-        line.innerHTML = '<span>' + checks[index][0] + '</span><span>' + checks[index][1] + '</span>';
-        log.appendChild(line);
-        log.scrollTop = log.scrollHeight;
-        bar.style.width = Math.round(((index + 1) / checks.length) * 100) + '%';
-        status.textContent = checks[index][0] + ' - ' + checks[index][1];
-        index += 1;
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      class Particle {
+        constructor() { this.reset(); }
+        reset() {
+          this.x = W / 2 + (Math.random() - 0.5) * 200;
+          this.y = H / 2 + (Math.random() - 0.5) * 100;
+          this.vx = (Math.random() - 0.5) * 0.3;
+          this.vy = (Math.random() - 0.5) * 0.3;
+          this.size = Math.random() * 3 + 1;
+          this.life = 1;
+          this.decay = 0.002 + Math.random() * 0.005;
+          this.glow = Math.random() * 0.5 + 0.5;
+          this.targetX = (Math.random() - 0.5) * W;
+          this.targetY = (Math.random() - 0.5) * H;
+        }
+        update() {
+          if (phase >= 2) {
+            this.vx += (this.targetX - this.x) * 0.001;
+            this.vy += (this.targetY - this.y) * 0.001;
+          }
+          this.x += this.vx;
+          this.y += this.vy;
+          this.life -= this.decay;
+          if (this.life <= 0) this.reset();
+        }
+        draw() {
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 212, 255, ' + (this.life * this.glow * 0.6) + ')';
+          ctx.fill();
+          if (this.size > 1.5) {
+            ctx.shadowColor = '#00D4FF';
+            ctx.shadowBlur = 8 * this.life;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        }
       }
 
-      appendLine();
-      const timer = setInterval(function() {
-        appendLine();
-        if (index >= checks.length) {
-          clearInterval(timer);
-          setTimeout(function() { loadingScreen.classList.add('hidden'); }, 650);
+      for (let i = 0; i < 80; i++) particles.push(new Particle());
+
+      function animateLoading() {
+        const elapsed = (Date.now() - startTime) / 1000;
+        ctx.clearRect(0, 0, W, H);
+
+        // Phase transitions
+        if (elapsed < 1.2) {
+          phase = 1;
+          loadingTitle.classList.add('visible');
+          loadingTitle.classList.remove('melting');
+          logoVisible = false;
+        } else if (elapsed < 2.2) {
+          phase = 2;
+          loadingTitle.classList.add('melting');
+          loadingTitle.style.animation = 'melt-disintegrate 1s ease-out forwards';
+          setTimeout(function() { loadingTitle.style.display = 'none'; }, 1000);
+          logoVisible = false;
+        } else if (elapsed < 3.5) {
+          phase = 3;
+          loadingLogo.classList.add('visible');
+          loadingLogo.classList.add('pulse');
+          logoVisible = true;
+          titleVisible = false;
+          loadingSubtitle.classList.add('visible');
+        } else if (elapsed < 5.5) {
+          phase = 4;
+          barWrap.classList.add('visible');
+          loadingProgress = Math.min(100, ((elapsed - 3.5) / 2) * 100);
+          barElement.style.width = loadingProgress + '%';
+          percentElement.textContent = Math.round(loadingProgress) + '%';
+        } else {
+          phase = 5;
+          loadingScreen.classList.add('hidden');
         }
-      }, 380);
+
+        // Draw particles
+        particles.forEach(function(p) {
+          p.update();
+          p.draw();
+        });
+
+        // Phase 2 extra particles burst
+        if (phase === 2) {
+          for (let i = 0; i < 3; i++) {
+            let p = new Particle();
+            p.x = W / 2;
+            p.y = H / 2 - 30;
+            p.vx = (Math.random() - 0.5) * 4;
+            p.vy = (Math.random() - 0.5) * 4 - 1;
+            p.glow = 1;
+            p.life = 1;
+            p.size = Math.random() * 4 + 1;
+            particles.push(p);
+          }
+          if (particles.length > 200) particles.splice(0, 80);
+        }
+
+        requestAnimationFrame(animateLoading);
+      }
+      animateLoading();
     })();
 
     // =========================================================================
@@ -1954,15 +2035,6 @@
       updateFindingHaltButtons();
     }
 
-    function renderAgentStep(data) {
-      const card = document.createElement('div');
-      card.className = 'agent-step-card';
-      const stage = data.stage || 'agent';
-      const message = data.message || 'ARGUS agent updated internal state.';
-      card.innerHTML = '<strong>' + escapeHtml(stage) + '</strong> ' + escapeHtml(message);
-      feedArea.insertBefore(card, feedArea.firstChild);
-    }
-
     function updateFindingHaltButtons() {
       const disabled = state.scanState !== 'scanning';
       document.querySelectorAll('.finding-halt-btn').forEach(function(btn) {
@@ -2115,8 +2187,6 @@
           const data = JSON.parse(event.data);
           if (data.type === 'finding') {
             renderFinding(data.data || data);
-          } else if (data.type === 'agent_step') {
-            renderAgentStep(data.data || data);
           } else if (data.type === 'complete') {
             scanCompleted = true;
             renderComplete(data.data || data);

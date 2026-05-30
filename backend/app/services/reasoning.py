@@ -18,7 +18,6 @@ LLM_CIRCUIT_OPEN_UNTIL = 0.0
 
 class ReasoningState(TypedDict):
     raw: RawFinding
-    memory_context: Dict[str, Any]
     analysis: Dict[str, Any]
     classified: ClassifiedFinding
 
@@ -101,22 +100,15 @@ async def _call_llm(prompt: str) -> str:
 
 async def analyze_finding(state: ReasoningState) -> ReasoningState:
     raw = state["raw"]
-    memory_context = state.get("memory_context") or {}
     prompt = f"""
 You are ARGUS, an autonomous cyber intelligence analyst for Security & Compliance.
 Classify this finding as CRITICAL, HIGH, MEDIUM, or LOW and return strict JSON only.
 Use only the evidence in the finding. Do not invent breaches, extracted data,
 attacker actions, CVEs, or infrastructure that is not present in the supplied
 title, description, URL, or evidence fields.
-Every response must include concrete recommendations. If memory context is
-provided, produce recommendations that emphasize new vulnerabilities and timeline
-changes compared to prior investigations.
 
 Finding:
 {raw.model_dump_json()}
-
-Memory context:
-{json.dumps(memory_context, default=str)}
 
 JSON schema:
 {{"severity":"CRITICAL|HIGH|MEDIUM|LOW","risk_score":0-100,"reasoning":"short actionable rationale","recommendations":["action 1","action 2"]}}
@@ -167,15 +159,8 @@ class ThreatReasoner:
     def __init__(self):
         self.graph = build_reasoning_graph()
 
-    async def classify(
-        self, raw: RawFinding, memory_context: Dict[str, Any] | None = None
-    ) -> ClassifiedFinding:
+    async def classify(self, raw: RawFinding) -> ClassifiedFinding:
         result = await self.graph.ainvoke(
-            {
-                "raw": raw,
-                "memory_context": memory_context or {},
-                "analysis": {},
-                "classified": None,
-            }
+            {"raw": raw, "analysis": {}, "classified": None}
         )
         return result["classified"]

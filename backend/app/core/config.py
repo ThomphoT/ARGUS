@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         parts = urlsplit(mcp_url)
         query_items = dict(parse_qsl(parts.query, keep_blank_values=True))
 
-        query_items["unlock"] = "1"
+        query_items.pop("unlock", None)
         if self.bright_data_api_token and not query_items.get("token"):
             query_items["token"] = self.bright_data_api_token.strip().strip("\"'")
         unlocker_zone = (

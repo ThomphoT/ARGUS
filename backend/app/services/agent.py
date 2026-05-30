@@ -44,51 +44,15 @@ class ArgusAgent:
             )
             try:
                 async for raw in collector.collect(company_domain):
-                    yield {
-                        "type": "agent_step",
-                        "data": {
-                            "stage": "understands",
-                            "collector": raw.collector.value,
-                            "message": f"ARGUS collected signal from {raw.collector.value}: {raw.title}",
-                        },
-                    }
                     logger.debug(
                         "Collector %s found raw finding: %s",
                         collector_name,
                         raw.title[:60],
                     )
-                    prior_context = {
-                        "domain": company_domain,
-                        "previous_investigation_count": len(
-                            await self.memory.recall_domain(company_domain)
-                        ),
-                    }
-                    finding = await self.reasoner.classify(raw, prior_context)
-                    diff = await self.memory.diff_intelligence(company_domain, finding)
-                    finding.evidence["diff_intelligence"] = diff
+                    finding = await self.reasoner.classify(raw)
                     classified_findings.append(finding)
                     await self.memory.store(finding)
-                    yield {
-                        "type": "agent_step",
-                        "data": {
-                            "stage": "decides",
-                            "collector": finding.collector.value,
-                            "message": (
-                                f"Risk scored {finding.risk_score}/100 "
-                                f"({finding.severity.value}); {diff['diff_summary']}"
-                            ),
-                        },
-                    }
-                    alerted = await self.alerts.maybe_alert(finding)
-                    if alerted:
-                        yield {
-                            "type": "agent_step",
-                            "data": {
-                                "stage": "acts",
-                                "collector": finding.collector.value,
-                                "message": "TriggerWare threat_detected workflow fired for autonomous defense.",
-                            },
-                        }
+                    await self.alerts.maybe_alert(finding)
                     event_data = finding.model_dump(mode="json")
                     event_data["type"] = finding.collector.value
                     yield {"type": "finding", "data": event_data}
