@@ -268,5 +268,5 @@ class BrightDataClient:
                 "query": query,
                 "via": "mock_serp",
             }
-            for idx in range(min(limit, 2))
+            for idx in range(limit)
         ]

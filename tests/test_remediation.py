@@ -27,6 +27,9 @@ def test_generate_remediation_payload_targets_high_risk_findings():
     assert payload["indicators"][0]["query"] == '"example.com" ".env"'
     assert payload["authorization"]["required"] is True
     assert payload["indicators"][0]["containment_profile"] == "credential_exposure"
+    assert payload["attack_path_detected"]
+    assert payload["potential_impact"]
+    assert payload["deployment_payload"]["commands"][0]["command"] == "revoke_or_rotate_token"
     assert "block_related_network_indicators" in payload["actions"]
 
 
@@ -53,4 +56,5 @@ def test_generate_remediation_payload_uses_attack_simulator_recommendations():
     actions = {step["action"] for step in payload["playbook_steps"]}
     assert payload["indicators"][0]["recommendation"].startswith("Audit bucket policies")
     assert payload["indicators"][0]["containment_profile"] == "public_cloud_storage"
+    assert payload["deployment_payload"]["commands"][0]["command"] == "disable_public_storage_access"
     assert "disable_public_storage_access" in actions

@@ -58,8 +58,12 @@ def test_websocket_scan_streams_findings_and_complete(monkeypatch):
                 "data": {
                     "company_domain": domain,
                     "severity": "LOW",
+                    "risk_score": 25,
                     "title": "Demo finding",
+                    "description": "Detailed collector evidence",
+                    "url": "https://example.com/demo",
                     "type": "leak_scanner",
+                    "evidence": {"query": '"example.com" ".env"'},
                 },
             }
             yield {
@@ -84,6 +88,10 @@ def test_websocket_scan_streams_findings_and_complete(monkeypatch):
     assert calls == [("example.com", "vulnerabilities", False)]
     assert finding["type"] == "finding"
     assert finding["data"]["title"] == "Demo finding"
+    assert finding["data"]["source_url"] == "https://example.com/demo"
+    assert finding["data"]["raw_evidence"]["query"] == '"example.com" ".env"'
+    assert finding["data"]["risk_score"] == 25
+    assert finding["data"]["recommendations"] == []
     assert complete["type"] == "complete"
     assert complete["data"]["score"] == 25
 
@@ -179,6 +187,9 @@ def test_remediate_endpoint_returns_manual_payload():
     actions = {step["action"] for step in payload["playbook_steps"]}
     assert data["deployment_status"] == "Payload Ready for Deployment"
     assert payload["authorization"]["mode"] == "human_in_the_loop"
+    assert payload["attack_path_detected"]
+    assert payload["potential_impact"]
+    assert payload["deployment_payload"]["commands"]
     assert "disable_public_storage_access" in actions
     assert "revoke_or_rotate_tokens" in actions
 
