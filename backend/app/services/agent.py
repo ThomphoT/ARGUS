@@ -44,15 +44,12 @@ class ArgusAgent:
             )
             try:
                 async for raw in collector.collect(company_domain):
-                    raw_data = raw.model_dump(mode="json")
                     yield {
                         "type": "agent_step",
                         "data": {
                             "stage": "understands",
                             "collector": raw.collector.value,
                             "message": f"ARGUS collected signal from {raw.collector.value}: {raw.title}",
-                            "raw_collector_output": raw_data,
-                            "raw_evidence": raw_data.get("evidence", {}),
                         },
                     }
                     logger.debug(
@@ -89,21 +86,11 @@ class ArgusAgent:
                             "data": {
                                 "stage": "acts",
                                 "collector": finding.collector.value,
-                                "message": "TriggerWare threat_detected workflow fired for operator notification.",
+                                "message": "TriggerWare threat_detected workflow fired for autonomous defense.",
                             },
                         }
                     event_data = finding.model_dump(mode="json")
-                    event_data.update(
-                        {
-                            "type": finding.collector.value,
-                            "source_vector": finding.collector.value,
-                            "source_url": finding.url,
-                            "target_url": finding.url,
-                            "raw_evidence": raw_data.get("evidence", {}),
-                            "raw_collector_output": raw_data,
-                            "evidence_snippet": finding.description,
-                        }
-                    )
+                    event_data["type"] = finding.collector.value
                     yield {"type": "finding", "data": event_data}
             except Exception as exc:
                 logger.error(

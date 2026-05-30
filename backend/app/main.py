@@ -192,8 +192,6 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
                     event = queue_task.result()
                     if event.get("type") == "_scan_finished":
                         break
-                    if event.get("type") == "finding":
-                        event["data"] = _rich_finding_payload(event.get("data") or {})
                     await websocket.send_json(event)
                     event_count += 1
                     if event.get("type") == "finding":
@@ -259,23 +257,3 @@ async def _stream_scan_events(
         await queue.put({"type": "error", "data": {"message": str(exc)}})
     finally:
         await queue.put({"type": "_scan_finished"})
-
-
-def _rich_finding_payload(finding: dict) -> dict:
-    evidence = finding.get("evidence") or {}
-    raw_evidence = finding.get("raw_evidence") or evidence
-    return {
-        **finding,
-        "source_vector": finding.get("source_vector")
-        or finding.get("collector")
-        or finding.get("type")
-        or finding.get("source"),
-        "source_url": finding.get("source_url") or finding.get("url"),
-        "target_url": finding.get("target_url") or finding.get("url"),
-        "raw_evidence": raw_evidence,
-        "evidence_snippet": finding.get("evidence_snippet")
-        or finding.get("description")
-        or (evidence.get("serp_result") or {}).get("snippet"),
-        "risk_score": int(finding.get("risk_score") or finding.get("score") or 0),
-        "recommendations": finding.get("recommendations") or [],
-    }

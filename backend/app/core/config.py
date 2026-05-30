@@ -28,12 +28,12 @@ class Settings(BaseSettings):
     bright_data_web_unlocker_zone: str = "mcp_unlocker"
     bright_data_mcp_search_tool: str = "search_engine"
     bright_data_country: str = "us"
-    max_serp_queries: int = 10
-    max_results_per_query: int = 6
+    max_serp_queries: int = 6
+    max_results_per_query: int = 5
     request_timeout_seconds: float = 25.0
     enable_mock_data: bool = True
     cache_ttl_seconds: int = 900
-    max_requests_per_minute: int = 60
+    max_requests_per_minute: int = 30
 
     llm_provider: str = "auto"
     openai_api_key: str = ""

@@ -13,15 +13,10 @@ class AttackSimulator(BaseCollector):
         stem = company_domain.split(".")[0]
         queries = [
             f"site:*.{company_domain} -www",
-            f"site:*.{company_domain} intitle:index.of",
-            f"site:dev.{company_domain} OR site:staging.{company_domain} OR site:test.{company_domain}",
-            f"site:api.{company_domain} OR site:admin.{company_domain} OR site:portal.{company_domain}",
             f'site:{company_domain} (ext:env OR ext:conf OR filetype:env OR filetype:conf)',
             f'"{company_domain}" ".git/config"',
             f'"{company_domain}" "s3.amazonaws.com" OR "{stem}" "s3 bucket"',
             f'"{stem}" "storage.googleapis.com" OR "{stem}" "blob.core.windows.net"',
-            f'"{company_domain}" "api_key" OR "{company_domain}" "secret"',
-            f'"{company_domain}" "jira" OR "{company_domain}" "jenkins"',
             f'"{company_domain}" "admin" "login"',
         ][: self.bright_data.settings.max_serp_queries]
 

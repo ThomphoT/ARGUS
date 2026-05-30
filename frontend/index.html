@@ -1921,60 +1921,28 @@
       return 'Isolate affected services, enable audit logging, snapshot evidence, and verify no further outbound transfer is occurring.';
     }
 
-    function isHighRiskFinding(data) {
-      const score = Number(data.risk_score || data.score || 0);
-      const level = String(data.risk_level || data.severity || '').toUpperCase();
-      return score >= 70 || level === 'HIGH' || level === 'CRITICAL';
-    }
-
-    function sourceVector(data) {
-      return data.source_vector || data.collector || data.type || data.source || 'ARGUS';
-    }
-
-    function targetUrl(data) {
-      return data.target_url || data.source_url || data.url || '';
-    }
-
-    function evidenceSnippet(data) {
-      const evidence = data.raw_evidence || data.evidence || {};
-      const serp = evidence.serp_result || {};
-      return data.evidence_snippet || data.description || serp.snippet || serp.description || 'No evidence snippet was returned.';
+    function canAuthorizeFinding(data) {
+      return !!data;
     }
 
     function armHumanAuthorization(data) {
-      const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
       state.currentThreat = data;
       haltExfiltrationBtn.disabled = false;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION READY';
       haltExfiltrationBtn.classList.add('visible', 'operator-required');
       remediationPanel.classList.add('operator-alert');
       remediationBody.innerHTML =
-        '<div class="operator-alert-banner">[ALERT] HUMAN-AUTHORIZED REMEDIATION READY</div>' +
+        '<div class="operator-alert-banner">[ALERT] OPERATOR ACTION REQUIRED</div>' +
         '<div class="remediation-metric">' +
-          '<div class="remediation-label">Human-Authorized Remediation</div>' +
-          '<div class="remediation-value">ARGUS has detected a critical breach. Authorize containment?</div>' +
-        '</div>' +
-        '<div class="remediation-metric">' +
-          '<div class="remediation-label">Vulnerability Summary</div>' +
+          '<div class="remediation-label">Threat selected for authorization</div>' +
           '<div class="remediation-value">' + escapeHtml(data.title || 'High-risk ARGUS finding') + '</div>' +
-        '</div>' +
-        '<div class="remediation-metric">' +
-          '<div class="remediation-label">Source Vector</div>' +
-          '<div class="remediation-value">' + escapeHtml(sourceVector(data)) + '</div>' +
         '</div>' +
         '<div class="remediation-metric">' +
           '<div class="remediation-label">Risk</div>' +
           '<div class="remediation-value">' + escapeHtml((data.severity || data.risk_level || 'HIGH') + ' / score ' + (data.risk_score || data.score || 0)) + '</div>' +
         '</div>' +
-        '<div>' +
-          '<div class="remediation-section-title">Evidence Snippet</div>' +
-          '<div class="remediation-list"><div>' + escapeHtml(evidenceSnippet(data)) + '</div></div>' +
-        '</div>' +
-        '<div>' +
-          '<div class="remediation-section-title">Actionable Recommendations</div>' +
-          '<div class="remediation-list">' + (recs.length ? recs.map(function(item) {
-            return '<div>&#x2022; ' + escapeHtml(item) + '</div>';
-          }).join('') : '<div>&#x2022; Generate containment payload and validate affected assets.</div>') + '</div>' +
+        '<div class="remediation-metric">' +
+          '<div class="remediation-label">Required action</div>' +
+          '<div class="remediation-value">Review the finding, then click HALT EXFILTRATION to generate a containment payload. ARGUS will not deploy without operator authorization.</div>' +
         '</div>';
       remediationModal.classList.add('visible');
       showFeedStatus('Operator action required', '#FF3B30');
@@ -1983,16 +1951,15 @@
     }
 
     function responseOverview(data) {
+      const evidence = data.evidence || {};
       const severity = (data.severity || 'LOW').toUpperCase();
       const score = data.risk_score != null ? data.risk_score : 0;
       return '<div class="finding-response-grid">' +
-        findingField('Source Vector', sourceVector(data)) +
-        findingField('Evidence Snippet', evidenceSnippet(data), { wide: true }) +
-        findingField('Target URL', targetUrl(data) || 'No target URL was returned.', { wide: true, muted: !targetUrl(data) }) +
-        findingField('Risk Badge', severity + ' / score ' + score, { priority: true, severity: severity }) +
         findingField('Reasoning', data.reasoning || 'No reasoning was returned for this finding.', { wide: true, muted: !data.reasoning }) +
+        findingField('Live query', evidence.query || 'No live query was returned.', { wide: true, muted: !evidence.query }) +
         findingField('Containment response', containmentResponse(data), { wide: true }) +
         findingField('Preservation boundary', preservationBoundary(data), { wide: true }) +
+        findingField('Priority', severity + ' / score ' + score, { priority: true, severity: severity }) +
         findingField('Next action', nextAction(data)) +
       '</div>';
     }
@@ -2005,26 +1972,25 @@
       const detailId = 'finding-detail-' + findingIndex;
       const responseId = 'finding-response-' + findingIndex;
 
-      const type = sourceVector(data) || 'info';
+      const type = data.type || 'info';
       const title = data.title || data.finding || 'Unknown finding';
-      const source = targetUrl(data) || data.source || '';
+      const source = data.source || data.url || '';
       const ts = data.timestamp || new Date().toISOString();
       const sev = (data.severity || 'low').toUpperCase();
-      const risk = Number(data.risk_score || data.score || 0);
 
       card.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div style="flex:1;min-width:0;">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
               <span class="tag-badge ` + getTagClass(type) + `">` + escapeHtml(type) + `</span>
-              <span class="finding-priority ` + priorityClass(sev) + `" style="font-size:10px;font-family:var(--font-mono);">` + escapeHtml(sev + ' / ' + risk) + `</span>
+              <span style="font-size:10px;color:var(--text-secondary);font-family:var(--font-mono);">` + escapeHtml(sev) + `</span>
             </div>
             <div style="font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:2px;">` + escapeHtml(title) + `</div>
             ` + (source ? `<div style="font-size:10px;color:var(--text-secondary);opacity:0.6;font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">` + escapeHtml(source) + `</div>` : '') + `
             <div id="` + responseId + `">` + responseOverview(data) + `</div>
             <div class="finding-actions">
               <button class="finding-action-btn" type="button" data-target="` + detailId + `">Read more</button>
-              <button class="finding-action-btn danger finding-halt-btn" type="button" data-high-risk="` + (isHighRiskFinding(data) ? 'true' : 'false') + `">Halt exfiltration</button>
+              <button class="finding-action-btn danger finding-halt-btn" type="button">Halt exfiltration</button>
             </div>
             <div class="finding-detail" id="` + detailId + `">` + evidenceSummary(data) + `</div>
           </div>
@@ -2046,7 +2012,7 @@
       feedArea.insertBefore(card, feedArea.firstChild);
       state.findings.push(data);
       findingCount.textContent = '[' + state.findings.length + ' findings]';
-      if (isHighRiskFinding(data)) {
+      if (canAuthorizeFinding(data)) {
         armHumanAuthorization(data);
       }
       updateFindingHaltButtons();
@@ -2063,7 +2029,7 @@
 
     function updateFindingHaltButtons() {
       document.querySelectorAll('.finding-halt-btn').forEach(function(btn) {
-        btn.disabled = state.scanState !== 'scanning' || btn.getAttribute('data-high-risk') !== 'true';
+        btn.disabled = state.scanState !== 'scanning';
       });
     }
 
@@ -2077,9 +2043,6 @@
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
       haltExfiltrationBtn.classList.remove('visible');
-      haltExfiltrationBtn.classList.remove('operator-required');
-      haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
       state.scanState = 'complete';
       updateFindingHaltButtons();
 
@@ -2109,8 +2072,6 @@
       const actions = Array.isArray(data.actions) ? data.actions : [];
       const payload = data.containment_payload || {};
       const playbookSteps = Array.isArray(payload.playbook_steps) ? payload.playbook_steps : [];
-      const attackPaths = Array.isArray(payload.attack_path_detected) ? payload.attack_path_detected : [];
-      const impacts = Array.isArray(payload.potential_impact) ? payload.potential_impact : [];
       const status = data.containment_status || 'unknown';
       const statusText = status === 'blocked' ? 'Attack blocked' : 'Defense pending';
       const attackerIp = attacker.ip || 'Not available';
@@ -2126,18 +2087,6 @@
           remediationMetric('Attacker IP', attackerIp) +
           remediationMetric('Location', attackerLocation) +
           remediationMetric('Defense system', defense.connected ? 'Connected' : 'Not configured') +
-        '</div>' +
-        '<div>' +
-          '<div class="remediation-section-title">Attack Path Detected</div>' +
-          '<div class="remediation-list">' + (attackPaths.length ? attackPaths.map(function(item) {
-            return '<div>&#x2022; ' + escapeHtml(item) + '</div>';
-          }).join('') : '<div>No explicit attack path was included in the payload.</div>') + '</div>' +
-        '</div>' +
-        '<div>' +
-          '<div class="remediation-section-title">Potential Impact</div>' +
-          '<div class="remediation-list">' + (impacts.length ? impacts.map(function(item) {
-            return '<div>&#x2022; ' + escapeHtml(item) + '</div>';
-          }).join('') : '<div>No impact statement was included in the payload.</div>') + '</div>' +
         '</div>' +
         '<div>' +
           '<div class="remediation-section-title">Actions Taken</div>' +
@@ -2167,7 +2116,6 @@
       haltExfiltrationBtn.classList.remove('visible');
       haltExfiltrationBtn.classList.remove('operator-required');
       haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
       state.currentThreat = null;
       state.scanState = 'halted';
       updateFindingHaltButtons();
@@ -2290,7 +2238,6 @@
       haltExfiltrationBtn.classList.remove('visible');
       haltExfiltrationBtn.classList.remove('operator-required');
       haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
       state.currentThreat = null;
       updateFindingHaltButtons();
       showFeedStatus('Standby', 'var(--text-secondary)');
@@ -2305,7 +2252,6 @@
       haltExfiltrationBtn.classList.remove('visible');
       haltExfiltrationBtn.classList.remove('operator-required');
       haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
       state.currentThreat = null;
       updateFindingHaltButtons();
       showFeedStatus('Stopped', '#FF3B30');
@@ -2331,9 +2277,6 @@
 
       scanBtn.textContent = 'STOPPING...';
       haltExfiltrationBtn.classList.remove('visible');
-      haltExfiltrationBtn.classList.remove('operator-required');
-      haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
       showFeedStatus('Stopping scan...', '#FFD60A');
       statusDot.style.background = '#FFD60A';
       dotSystem.className = 'dot active';
@@ -2372,7 +2315,6 @@
       haltExfiltrationBtn.classList.remove('visible');
       haltExfiltrationBtn.classList.remove('operator-required');
       haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
       showFeedStatus('Deploying containment agent...', '#FFD60A');
       statusDot.style.background = '#FFD60A';
       dotSystem.className = 'dot active';
@@ -2424,7 +2366,6 @@
       scanBtn.classList.add('scanning');
       haltExfiltrationBtn.classList.remove('visible', 'operator-required');
       haltExfiltrationBtn.disabled = true;
-      haltExfiltrationBtn.textContent = 'HALT EXFILTRATION';
 
       resetGauge();
 

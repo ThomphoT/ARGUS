@@ -38,10 +38,8 @@ def generate_remediation_payload(
     ]
     indicators = []
     playbook_steps = []
-    deployment_payloads = []
     for finding in critical_findings:
         evidence = finding.get("evidence") or {}
-        raw_evidence = finding.get("raw_evidence") or evidence
         recommendations = finding.get("recommendations") or []
         if isinstance(recommendations, str):
             recommendations = [recommendations]
@@ -50,22 +48,17 @@ def generate_remediation_payload(
             or (recommendations or [None])[0]
             or "Preserve evidence, restrict exposed assets, and validate ownership."
         )
-        steps = _steps_for_finding(finding, recommendation)
-        playbook_steps.extend(steps)
-        deployment_payloads.extend(_deployment_payloads_for_finding(finding, steps))
+        playbook_steps.extend(_steps_for_finding(finding, recommendation))
         indicators.append(
             {
                 "title": finding.get("title"),
                 "severity": finding.get("severity"),
                 "risk_score": finding.get("risk_score"),
-                "url": finding.get("url") or finding.get("target_url"),
+                "url": finding.get("url"),
                 "query": evidence.get("query"),
                 "collector": finding.get("collector") or finding.get("type"),
                 "recommendation": recommendation,
                 "containment_profile": _containment_profile(finding),
-                "attack_path": _attack_path(finding),
-                "potential_impact": _potential_impact(finding),
-                "raw_evidence": raw_evidence,
             }
         )
 
@@ -82,21 +75,6 @@ def generate_remediation_payload(
         "company_domain": company_domain,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "priority": "critical" if highest_risk >= 90 else "high" if highest_risk >= 70 else "review",
-        "attack_path_detected": [_attack_path(item) for item in critical_findings],
-        "potential_impact": [_potential_impact(item) for item in critical_findings],
-        "vulnerability_report": [
-            {
-                "summary": item.get("title") or "High-risk ARGUS finding",
-                "source_vector": item.get("source_vector")
-                or item.get("collector")
-                or item.get("type"),
-                "target_url": item.get("target_url") or item.get("url"),
-                "evidence_snippet": item.get("evidence_snippet")
-                or item.get("description"),
-                "recommendations": item.get("recommendations") or [],
-            }
-            for item in critical_findings
-        ],
         "attacker": attacker or {},
         "actions": [
             "block_related_network_indicators",
@@ -106,11 +84,6 @@ def generate_remediation_payload(
             "preserve_evidence_snapshot",
         ],
         "playbook_steps": playbook_steps[:20],
-        "deployment_payload": {
-            "format": "json",
-            "description": "Exact payloads for firewall, IAM, cloud security, or EDR playbooks.",
-            "commands": deployment_payloads[:20],
-        },
         "indicators": indicators[:25],
         "recovered_data": (recovered_data or [])[:10],
         "summary": {
@@ -130,8 +103,6 @@ def _steps_for_finding(
             str(finding.get("description") or ""),
             str(finding.get("url") or ""),
             json.dumps(finding.get("evidence") or {}, default=str),
-            json.dumps(finding.get("raw_evidence") or {}, default=str),
-            recommendation,
         ]
     ).lower()
     steps: List[Dict[str, Any]] = [
@@ -214,95 +185,6 @@ def _steps_for_finding(
     return steps
 
 
-def _deployment_payloads_for_finding(
-    finding: Dict[str, Any], steps: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    payloads = []
-    for step in steps:
-        action = step.get("action")
-        parameters = step.get("parameters") or {}
-        if action == "block_ip":
-            payloads.append(
-                {
-                    "system": "firewall",
-                    "command": "block_ip",
-                    "payload": {
-                        "ip": parameters.get("ip"),
-                        "duration": parameters.get("duration", "24h"),
-                        "reason": finding.get("title") or "ARGUS high-risk finding",
-                        "source": "ARGUS",
-                    },
-                }
-            )
-        elif action == "revoke_or_rotate_tokens":
-            payloads.append(
-                {
-                    "system": "iam",
-                    "command": "revoke_or_rotate_token",
-                    "payload": {
-                        "scope": parameters.get("scope"),
-                        "evidence_url": parameters.get("evidence_url"),
-                        "priority": parameters.get("rotation_priority", "immediate"),
-                        "preserve_audit_log": True,
-                    },
-                }
-            )
-        elif action == "disable_public_storage_access":
-            payloads.append(
-                {
-                    "system": "cloud_security",
-                    "command": "disable_public_storage_access",
-                    "payload": {
-                        "resource_hint": parameters.get("resource_hint"),
-                        "enforce_private_acl": True,
-                        "block_public_policy": True,
-                    },
-                }
-            )
-        elif action == "block_path":
-            payloads.append(
-                {
-                    "system": "edge_firewall",
-                    "command": "block_path",
-                    "payload": {
-                        "path_pattern": parameters.get("path_pattern"),
-                        "evidence_url": parameters.get("evidence_url"),
-                    },
-                }
-            )
-    return payloads
-
-
-def _attack_path(finding: Dict[str, Any]) -> str:
-    evidence = finding.get("raw_evidence") or finding.get("evidence") or {}
-    query = evidence.get("query")
-    vector = (
-        finding.get("source_vector")
-        or finding.get("collector")
-        or finding.get("type")
-        or "public_intelligence"
-    )
-    target = finding.get("target_url") or finding.get("url") or "unresolved target"
-    if query:
-        return f"{vector} query `{query}` exposed `{target}`"
-    return f"{vector} exposed `{target}`"
-
-
-def _potential_impact(finding: Dict[str, Any]) -> str:
-    profile = _containment_profile(finding)
-    impacts = {
-        "public_cloud_storage": "Public object access can leak sensitive records, backups, or customer data.",
-        "credential_exposure": "Exposed secrets can enable account takeover, API abuse, and lateral movement.",
-        "repository_metadata_exposure": "Public repository metadata can reveal internal services, remotes, and credential history.",
-        "network_indicator_block": "Observed infrastructure may support active exfiltration or repeated reconnaissance.",
-        "browser_policy_hardening": "Missing browser controls can increase injection, clickjacking, or data exposure risk.",
-    }
-    return impacts.get(
-        profile,
-        "The signal may map to owned infrastructure and requires analyst validation before containment.",
-    )
-
-
 def _containment_profile(finding: Dict[str, Any]) -> str:
     recommendations = finding.get("recommendations") or []
     if isinstance(recommendations, str):
@@ -312,9 +194,7 @@ def _containment_profile(finding: Dict[str, Any]) -> str:
             str(finding.get("title") or ""),
             str(finding.get("description") or ""),
             str(finding.get("url") or ""),
-            str(finding.get("target_url") or ""),
             json.dumps(finding.get("evidence") or {}, default=str),
-            json.dumps(finding.get("raw_evidence") or {}, default=str),
             " ".join(recommendations),
         ]
     ).lower()
