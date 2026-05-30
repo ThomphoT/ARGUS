@@ -2,6 +2,7 @@
 
 import hmac
 import json
+import logging
 from hashlib import sha256
 from typing import Dict
 
@@ -10,17 +11,21 @@ import httpx
 from backend.app.core.config import Settings
 from backend.app.models import ClassifiedFinding, Severity
 
+logger = logging.getLogger("argus")
+
 
 class TriggerWareAlerts:
     """Fire TriggerWare.ai webhook alerts for HIGH and CRITICAL threats."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.last_error = ""
 
     async def maybe_alert(self, finding: ClassifiedFinding) -> bool:
         if finding.severity not in {Severity.CRITICAL, Severity.HIGH}:
             return False
-        if not self.settings.triggerware_webhook_url:
+        webhook_url = self.settings.triggerware_webhook_url.strip().strip("\"'")
+        if not webhook_url:
             return False
 
         payload = {
@@ -37,11 +42,17 @@ class TriggerWareAlerts:
                 sha256,
             ).hexdigest()
 
-        async with httpx.AsyncClient(
-            timeout=self.settings.request_timeout_seconds
-        ) as client:
-            response = await client.post(
-                self.settings.triggerware_webhook_url, content=body, headers=headers
-            )
-            response.raise_for_status()
-        return True
+        try:
+            async with httpx.AsyncClient(
+                timeout=self.settings.request_timeout_seconds
+            ) as client:
+                response = await client.post(
+                    webhook_url, content=body, headers=headers
+                )
+                response.raise_for_status()
+            self.last_error = ""
+            return True
+        except Exception as exc:
+            self.last_error = f"{type(exc).__name__}: {exc}"
+            logger.warning("TriggerWare webhook delivery failed: %s", self.last_error)
+            return False

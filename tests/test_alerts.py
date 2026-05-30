@@ -30,6 +30,20 @@ class _FakeAsyncClient:
         return _FakeResponse()
 
 
+class _FailingAsyncClient:
+    def __init__(self, *args, **kwargs):
+        return None
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return None
+
+    async def post(self, url, content, headers):
+        raise RuntimeError("webhook unavailable")
+
+
 def _finding(severity: Severity, risk_score: int) -> ClassifiedFinding:
     return ClassifiedFinding(
         company_domain="example.com",
@@ -77,3 +91,19 @@ async def test_triggerware_alert_skips_medium_findings(monkeypatch, test_setting
 
     assert sent is False
     assert _FakeAsyncClient.posts == []
+
+
+@pytest.mark.asyncio
+async def test_triggerware_alert_failure_does_not_abort_scan(
+    monkeypatch, test_settings
+):
+    monkeypatch.setattr(
+        "backend.app.services.alerts.httpx.AsyncClient", _FailingAsyncClient
+    )
+    test_settings.triggerware_webhook_url = "https://triggerware.example/webhook"
+    alerts = TriggerWareAlerts(test_settings)
+
+    sent = await alerts.maybe_alert(_finding(Severity.CRITICAL, 95))
+
+    assert sent is False
+    assert "RuntimeError" in alerts.last_error

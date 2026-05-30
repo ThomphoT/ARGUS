@@ -52,9 +52,15 @@ class ArgusAgent:
                     finding = await self.reasoner.classify(raw)
                     classified_findings.append(finding)
                     await self.memory.store(finding)
-                    await self.alerts.maybe_alert(finding)
+                    alerted = await self.alerts.maybe_alert(finding)
                     event_data = finding.model_dump(mode="json")
                     event_data["type"] = finding.collector.value
+                    event_data["alert_delivered"] = alerted
+                    if self.alerts.last_error:
+                        event_data["alert_error"] = self.alerts.last_error
+                    if self.memory.last_error:
+                        event_data["memory_error"] = self.memory.last_error
+                    event_data["memory_backend"] = self.memory.last_backend
                     yield {"type": "finding", "data": event_data}
             except Exception as exc:
                 logger.error(

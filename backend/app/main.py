@@ -65,7 +65,9 @@ async def health() -> dict:
         "ollama_model": settings.ollama_model,
         "bright_data": bright_data.status(),
         "cognee_enabled": settings.cognee_enabled,
+        "cognee_dataset": settings.cognee_dataset,
         "triggerware_configured": bool(settings.triggerware_webhook_url),
+        "defense_webhook_configured": bool(settings.defense_webhook_url),
     }
 
 
