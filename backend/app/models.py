@@ -59,3 +59,9 @@ class ScanSummary(BaseModel):
 class AlertPayload(BaseModel):
     finding: ClassifiedFinding
     destination: Optional[HttpUrl] = None
+
+
+class RemediationRequest(BaseModel):
+    target_id: str = Field(..., min_length=3, max_length=255)
+    command: str = Field(default="halt", max_length=32)
+    threat_data: Dict[str, Any] = Field(default_factory=dict)

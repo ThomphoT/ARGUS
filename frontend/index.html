@@ -1068,6 +1068,18 @@
       background: linear-gradient(135deg, #FF3B30 0%, #8B0000 100%);
     }
     #halt-exfiltration-btn.visible { display: block; }
+    #halt-exfiltration-btn:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    #halt-exfiltration-btn.operator-required {
+      animation: critical-alert-pulse 1.3s ease-in-out infinite;
+    }
+    @keyframes critical-alert-pulse {
+      0%, 100% { box-shadow: 0 0 14px rgba(255, 59, 48, 0.28); }
+      50% { box-shadow: 0 0 34px rgba(255, 59, 48, 0.62); }
+    }
     #scan-btn::after,
     #halt-exfiltration-btn::after {
       content: '';
@@ -1332,6 +1344,23 @@
       background: rgba(5, 7, 11, 0.96);
       box-shadow: 0 0 48px rgba(0, 212, 255, 0.14);
     }
+    #remediation-panel.operator-alert {
+      border-color: rgba(255, 59, 48, 0.72);
+      box-shadow: 0 0 52px rgba(255, 59, 48, 0.22);
+    }
+    .operator-alert-banner {
+      border: 1px solid rgba(255, 59, 48, 0.45);
+      border-radius: 4px;
+      background: rgba(255, 59, 48, 0.08);
+      color: var(--severity-critical);
+      font-family: var(--font-display);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1.4px;
+      padding: 10px 12px;
+      text-transform: uppercase;
+      animation: critical-alert-pulse 1.4s ease-in-out infinite;
+    }
     #remediation-head {
       display: flex;
       align-items: flex-start;
@@ -1552,7 +1581,7 @@
               <option value="social">Social Engineering</option>
             </select>
             <button id="scan-btn" type="button">INITIATE SCAN</button>
-            <button id="halt-exfiltration-btn" type="button">STOP SCAN</button>
+            <button id="halt-exfiltration-btn" type="button" disabled>HALT EXFILTRATION</button>
           </div>
 
           <div class="panel" style="padding:16px;display:none;" id="risk-gauge-card">
@@ -1781,6 +1810,8 @@
       ws: null,
       attackMode: true,
       score: 0,
+      currentThreat: null,
+      currentTarget: '',
     };
 
     const targetInput = document.getElementById('target-input');
@@ -1805,6 +1836,7 @@
     const dotBd = document.getElementById('dot-bd');
     const dotOpenai = document.getElementById('dot-openai');
     const remediationModal = document.getElementById('remediation-modal');
+    const remediationPanel = document.getElementById('remediation-panel');
     const remediationBody = document.getElementById('remediation-body');
     const remediationClose = document.getElementById('remediation-close');
 
@@ -1889,6 +1921,37 @@
       return 'Isolate affected services, enable audit logging, snapshot evidence, and verify no further outbound transfer is occurring.';
     }
 
+    function isHighRiskFinding(data) {
+      const score = Number(data.risk_score || data.score || 0);
+      const level = String(data.risk_level || data.severity || '').toUpperCase();
+      return score >= 70 || level === 'HIGH' || level === 'CRITICAL';
+    }
+
+    function armHumanAuthorization(data) {
+      state.currentThreat = data;
+      haltExfiltrationBtn.disabled = false;
+      haltExfiltrationBtn.classList.add('visible', 'operator-required');
+      remediationPanel.classList.add('operator-alert');
+      remediationBody.innerHTML =
+        '<div class="operator-alert-banner">[ALERT] OPERATOR ACTION REQUIRED</div>' +
+        '<div class="remediation-metric">' +
+          '<div class="remediation-label">Threat selected for authorization</div>' +
+          '<div class="remediation-value">' + escapeHtml(data.title || 'High-risk ARGUS finding') + '</div>' +
+        '</div>' +
+        '<div class="remediation-metric">' +
+          '<div class="remediation-label">Risk</div>' +
+          '<div class="remediation-value">' + escapeHtml((data.severity || data.risk_level || 'HIGH') + ' / score ' + (data.risk_score || data.score || 0)) + '</div>' +
+        '</div>' +
+        '<div class="remediation-metric">' +
+          '<div class="remediation-label">Required action</div>' +
+          '<div class="remediation-value">Review the finding, then click HALT EXFILTRATION to generate a containment payload. ARGUS will not deploy without operator authorization.</div>' +
+        '</div>';
+      remediationModal.classList.add('visible');
+      showFeedStatus('Operator action required', '#FF3B30');
+      statusDot.style.background = '#FF3B30';
+      showToast('[ALERT] OPERATOR ACTION REQUIRED');
+    }
+
     function responseOverview(data) {
       const evidence = data.evidence || {};
       const severity = (data.severity || 'LOW').toUpperCase();
@@ -1929,7 +1992,7 @@
             <div id="` + responseId + `">` + responseOverview(data) + `</div>
             <div class="finding-actions">
               <button class="finding-action-btn" type="button" data-target="` + detailId + `">Read more</button>
-              <button class="finding-action-btn danger finding-halt-btn" type="button">Halt exfiltration</button>
+              <button class="finding-action-btn danger finding-halt-btn" type="button" data-high-risk="` + (isHighRiskFinding(data) ? 'true' : 'false') + `">Halt exfiltration</button>
             </div>
             <div class="finding-detail" id="` + detailId + `">` + evidenceSummary(data) + `</div>
           </div>
@@ -1939,7 +2002,7 @@
       card.querySelectorAll('.finding-action-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
           if (btn.classList.contains('finding-halt-btn')) {
-            haltExfiltration();
+            haltExfiltration(data);
             updateFindingHaltButtons();
             return;
           }
@@ -1951,6 +2014,9 @@
       feedArea.insertBefore(card, feedArea.firstChild);
       state.findings.push(data);
       findingCount.textContent = '[' + state.findings.length + ' findings]';
+      if (isHighRiskFinding(data)) {
+        armHumanAuthorization(data);
+      }
       updateFindingHaltButtons();
     }
 
@@ -1964,9 +2030,8 @@
     }
 
     function updateFindingHaltButtons() {
-      const disabled = state.scanState !== 'scanning';
       document.querySelectorAll('.finding-halt-btn').forEach(function(btn) {
-        btn.disabled = disabled;
+        btn.disabled = state.scanState !== 'scanning' || btn.getAttribute('data-high-risk') !== 'true';
       });
     }
 
@@ -2007,16 +2072,20 @@
       const summary = data.summary || {};
       const recovered = Array.isArray(data.recovered_data) ? data.recovered_data : [];
       const actions = Array.isArray(data.actions) ? data.actions : [];
+      const payload = data.containment_payload || {};
+      const playbookSteps = Array.isArray(payload.playbook_steps) ? payload.playbook_steps : [];
       const status = data.containment_status || 'unknown';
       const statusText = status === 'blocked' ? 'Attack blocked' : 'Defense pending';
       const attackerIp = attacker.ip || 'Not available';
       const attackerLocation = attacker.location || 'Not available';
 
       remediationBody.innerHTML =
+        '<div class="operator-alert-banner">Payload Ready for Deployment</div>' +
         '<div class="remediation-grid">' +
           remediationMetric('Incident', data.incident_id || 'ARGUS') +
           remediationMetric('Containment', statusText) +
           remediationMetric('Recovered records', String(summary.records_recovered || recovered.length || 0)) +
+          remediationMetric('Playbook steps', String(summary.playbook_steps || playbookSteps.length || 0)) +
           remediationMetric('Attacker IP', attackerIp) +
           remediationMetric('Location', attackerLocation) +
           remediationMetric('Defense system', defense.connected ? 'Connected' : 'Not configured') +
@@ -2028,6 +2097,10 @@
           }).join('') + '</div>' +
         '</div>' +
         '<div>' +
+          '<div class="remediation-section-title">Deployment Payload</div>' +
+          '<div class="finding-detail open"><pre>' + escapeHtml(JSON.stringify(payload, null, 2)) + '</pre></div>' +
+        '</div>' +
+        '<div>' +
           '<div class="remediation-section-title">Recovered Data</div>' +
           '<div class="remediation-list">' + (recovered.length ? recovered.map(renderRecoveredRecord).join('') : '<div>No recoverable data was collected before the halt request.</div>') + '</div>' +
         '</div>' +
@@ -2037,11 +2110,15 @@
         '</div>';
 
       remediationModal.classList.add('visible');
+      remediationPanel.classList.remove('operator-alert');
       showFeedStatus(statusText, status === 'blocked' ? '#30D158' : '#FFD60A');
       statusDot.style.background = status === 'blocked' ? '#30D158' : '#FFD60A';
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
       haltExfiltrationBtn.classList.remove('visible');
+      haltExfiltrationBtn.classList.remove('operator-required');
+      haltExfiltrationBtn.disabled = true;
+      state.currentThreat = null;
       state.scanState = 'halted';
       updateFindingHaltButtons();
       showToast(statusText + '. Report generated.');
@@ -2089,6 +2166,14 @@
       var url = new URL(origin);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
       url.pathname = '/ws/' + encodeURIComponent(company);
+      url.search = '';
+      url.hash = '';
+      return url.toString();
+    }
+
+    function toApiUrl(path) {
+      var url = new URL(getBackendOrigin());
+      url.pathname = path;
       url.search = '';
       url.hash = '';
       return url.toString();
@@ -2153,6 +2238,9 @@
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
       haltExfiltrationBtn.classList.remove('visible');
+      haltExfiltrationBtn.classList.remove('operator-required');
+      haltExfiltrationBtn.disabled = true;
+      state.currentThreat = null;
       updateFindingHaltButtons();
       showFeedStatus('Standby', 'var(--text-secondary)');
       statusDot.style.background = 'var(--text-secondary)';
@@ -2164,6 +2252,9 @@
       scanBtn.textContent = 'INITIATE SCAN';
       scanBtn.classList.remove('scanning');
       haltExfiltrationBtn.classList.remove('visible');
+      haltExfiltrationBtn.classList.remove('operator-required');
+      haltExfiltrationBtn.disabled = true;
+      state.currentThreat = null;
       updateFindingHaltButtons();
       showFeedStatus('Stopped', '#FF3B30');
       statusDot.style.background = '#FF3B30';
@@ -2194,15 +2285,28 @@
       showToast('Stop signal sent. Cancelling scan.');
     }
 
-    function haltExfiltration() {
+    function haltExfiltration(threatData) {
       if (state.scanState !== 'scanning') return;
+      const selectedThreat = threatData || state.currentThreat;
+      if (!selectedThreat) {
+        showToast('No high-risk threat selected for containment.');
+        return;
+      }
 
       state.scanState = 'halting';
       updateFindingHaltButtons();
+      const haltPayload = {
+        type: 'halt',
+        command: 'halt',
+        target_id: state.currentTarget || targetInput.value.trim(),
+        threat_data: selectedThreat
+      };
+      let sentOverSocket = false;
       if (state.ws) {
         try {
           if (state.ws.readyState === WebSocket.OPEN) {
-            state.ws.send(JSON.stringify({ type: 'halt' }));
+            state.ws.send(JSON.stringify(haltPayload));
+            sentOverSocket = true;
           }
         } catch(e) {
           console.warn('Unable to send halt signal:', e);
@@ -2211,10 +2315,32 @@
 
       scanBtn.textContent = 'DEPLOYING AGENT...';
       haltExfiltrationBtn.classList.remove('visible');
+      haltExfiltrationBtn.classList.remove('operator-required');
+      haltExfiltrationBtn.disabled = true;
       showFeedStatus('Deploying containment agent...', '#FFD60A');
       statusDot.style.background = '#FFD60A';
       dotSystem.className = 'dot active';
       showToast('Halt signal sent. ARGUS remediation agent deploying.');
+
+      if (!sentOverSocket) {
+        fetch(toApiUrl('/api/remediate'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(haltPayload)
+        })
+          .then(function(response) {
+            if (!response.ok) throw new Error('Remediation request failed with HTTP ' + response.status);
+            return response.json();
+          })
+          .then(function(report) {
+            renderRemediationReport(report);
+          })
+          .catch(function(error) {
+            console.warn('Unable to request remediation:', error);
+            showToast('Remediation request failed. Check backend connectivity.');
+            resetToIdle();
+          });
+      }
     }
 
     function startScan(event) {
@@ -2231,6 +2357,8 @@
 
       state.scanState = 'scanning';
       state.findings = [];
+      state.currentThreat = null;
+      state.currentTarget = target;
       feedArea.innerHTML = '';
       threatCard.style.display = 'none';
       riskGaugeCard.style.display = 'none';
@@ -2238,7 +2366,8 @@
 
       scanBtn.textContent = 'SCANNING\u2026';
       scanBtn.classList.add('scanning');
-      haltExfiltrationBtn.classList.add('visible');
+      haltExfiltrationBtn.classList.remove('visible', 'operator-required');
+      haltExfiltrationBtn.disabled = true;
 
       resetGauge();
 
@@ -2263,7 +2392,9 @@
     });
 
     scanBtn.addEventListener('click', startScan);
-    haltExfiltrationBtn.addEventListener('click', stopScan);
+    haltExfiltrationBtn.addEventListener('click', function() {
+      haltExfiltration(state.currentThreat);
+    });
     remediationClose.addEventListener('click', function() {
       remediationModal.classList.remove('visible');
     });

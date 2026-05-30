@@ -6,13 +6,13 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from backend.app.clients.bright_data import BrightDataClient
 from backend.app.core.config import get_settings
-from backend.app.models import ScanRequest
+from backend.app.models import RemediationRequest, ScanRequest
 from backend.app.services.agent import ArgusAgent
 from backend.app.services.remediation import RemediationAgent
 from backend.app.utils.domain import normalize_domain
@@ -87,6 +87,17 @@ async def scan(request: ScanRequest) -> dict:
     async for event in agent.stream_scan(domain, request.focus, request.attack_mode):
         events.append(event)
     return {"events": events}
+
+
+@app.post("/api/remediate")
+async def remediate(request: RemediationRequest) -> dict:
+    if request.command.lower() != "halt":
+        raise HTTPException(status_code=400, detail="Unsupported remediation command.")
+    domain = normalize_domain(request.target_id)
+    threat = request.threat_data or {}
+    findings = [threat] if threat else []
+    report = await RemediationAgent(settings).halt_exfiltration(domain, findings)
+    return report
 
 
 @app.websocket("/ws/{company_domain}")
@@ -165,8 +176,10 @@ async def websocket_scan(websocket: WebSocket, company_domain: str) -> None:
                             scan_task.cancel()
                             with contextlib.suppress(asyncio.CancelledError):
                                 await scan_task
+                        threat_data = payload.get("threat_data") or {}
+                        scoped_findings = [threat_data] if threat_data else findings
                         report = await remediation_agent.halt_exfiltration(
-                            domain, findings
+                            domain, scoped_findings
                         )
                         await websocket.send_json(
                             {"type": "remediation_report", "data": report}
