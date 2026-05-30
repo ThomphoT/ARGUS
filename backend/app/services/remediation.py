@@ -37,18 +37,8 @@ def generate_remediation_payload(
         or str(item.get("severity") or "").upper() in {"HIGH", "CRITICAL"}
     ]
     indicators = []
-    playbook_steps = []
     for finding in critical_findings:
         evidence = finding.get("evidence") or {}
-        recommendations = finding.get("recommendations") or []
-        if isinstance(recommendations, str):
-            recommendations = [recommendations]
-        recommendation = (
-            evidence.get("defense_recommendation")
-            or (recommendations or [None])[0]
-            or "Preserve evidence, restrict exposed assets, and validate ownership."
-        )
-        playbook_steps.extend(_steps_for_finding(finding, recommendation))
         indicators.append(
             {
                 "title": finding.get("title"),
@@ -57,20 +47,12 @@ def generate_remediation_payload(
                 "url": finding.get("url"),
                 "query": evidence.get("query"),
                 "collector": finding.get("collector") or finding.get("type"),
-                "recommendation": recommendation,
-                "containment_profile": _containment_profile(finding),
             }
         )
 
     return {
         "source": "ARGUS",
         "event": "halt_exfiltration",
-        "authorization": {
-            "mode": "human_in_the_loop",
-            "required": True,
-            "granted_by": "operator_click",
-            "note": "ARGUS generated this payload only after a manual halt request.",
-        },
         "playbook": "contain-open-web-exposure",
         "company_domain": company_domain,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -83,7 +65,6 @@ def generate_remediation_payload(
             "open_soar_incident",
             "preserve_evidence_snapshot",
         ],
-        "playbook_steps": playbook_steps[:20],
         "indicators": indicators[:25],
         "recovered_data": (recovered_data or [])[:10],
         "summary": {
@@ -92,128 +73,6 @@ def generate_remediation_payload(
             "highest_risk": highest_risk,
         },
     }
-
-
-def _steps_for_finding(
-    finding: Dict[str, Any], recommendation: str
-) -> List[Dict[str, Any]]:
-    text = " ".join(
-        [
-            str(finding.get("title") or ""),
-            str(finding.get("description") or ""),
-            str(finding.get("url") or ""),
-            json.dumps(finding.get("evidence") or {}, default=str),
-        ]
-    ).lower()
-    steps: List[Dict[str, Any]] = [
-        {
-            "system": "soar",
-            "action": "open_case",
-            "parameters": {
-                "title": finding.get("title") or "ARGUS high-risk exposure",
-                "severity": finding.get("severity") or "HIGH",
-                "recommendation": recommendation,
-            },
-        }
-    ]
-    if any(
-        token in text for token in ["csp", "content-security-policy", "x-frame-options"]
-    ):
-        steps.append(
-            {
-                "system": "edge_firewall",
-                "action": "enforce_security_headers",
-                "parameters": {
-                    "headers": {
-                        "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
-                        "X-Content-Type-Options": "nosniff",
-                        "Referrer-Policy": "strict-origin-when-cross-origin",
-                    },
-                    "recommendation": recommendation,
-                },
-            }
-        )
-    if any(
-        token in text for token in [".env", "api_key", "secret", "token", "private key"]
-    ):
-        steps.append(
-            {
-                "system": "iam",
-                "action": "revoke_or_rotate_tokens",
-                "parameters": {
-                    "scope": "credentials referenced by public exposure evidence",
-                    "evidence_url": finding.get("url"),
-                    "rotation_priority": "immediate",
-                },
-            }
-        )
-    if any(
-        token in text
-        for token in ["s3", "bucket", "storage.googleapis", "blob.core.windows"]
-    ):
-        steps.append(
-            {
-                "system": "cloud_security",
-                "action": "disable_public_storage_access",
-                "parameters": {
-                    "resource_hint": finding.get("url") or finding.get("title"),
-                    "enforce_private_acl": True,
-                    "block_public_policy": True,
-                },
-            }
-        )
-    if ".git/config" in text or "repository" in text:
-        steps.append(
-            {
-                "system": "edge_firewall",
-                "action": "block_path",
-                "parameters": {
-                    "path_pattern": ".git/*",
-                    "evidence_url": finding.get("url"),
-                },
-            }
-        )
-    attacker_ip = IP_PATTERN.search(text)
-    if attacker_ip:
-        steps.append(
-            {
-                "system": "firewall",
-                "action": "block_ip",
-                "parameters": {"ip": attacker_ip.group(0), "duration": "24h"},
-            }
-        )
-    return steps
-
-
-def _containment_profile(finding: Dict[str, Any]) -> str:
-    recommendations = finding.get("recommendations") or []
-    if isinstance(recommendations, str):
-        recommendations = [recommendations]
-    text = " ".join(
-        [
-            str(finding.get("title") or ""),
-            str(finding.get("description") or ""),
-            str(finding.get("url") or ""),
-            json.dumps(finding.get("evidence") or {}, default=str),
-            " ".join(recommendations),
-        ]
-    ).lower()
-    if any(
-        token in text
-        for token in ["s3", "bucket", "storage.googleapis", "blob.core.windows"]
-    ):
-        return "public_cloud_storage"
-    if any(
-        token in text for token in [".env", "api_key", "secret", "token", "private key"]
-    ):
-        return "credential_exposure"
-    if ".git/config" in text or "repository" in text:
-        return "repository_metadata_exposure"
-    if IP_PATTERN.search(text):
-        return "network_indicator_block"
-    if "csp" in text or "content-security-policy" in text:
-        return "browser_policy_hardening"
-    return "manual_triage"
 
 
 class RemediationAgent:
@@ -233,9 +92,6 @@ class RemediationAgent:
             "Prepared containment payload for the configured defense system.",
         ]
 
-        containment_payload = generate_remediation_payload(
-            company_domain, findings, recovered_data, attacker
-        )
         defense_result = await self._dispatch_defense_playbook(
             company_domain, findings, recovered_data, attacker
         )
@@ -254,8 +110,6 @@ class RemediationAgent:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "containment_status": containment_status,
             "defense_system": defense_result,
-            "containment_payload": containment_payload,
-            "deployment_status": "Payload Ready for Deployment",
             "attacker": attacker,
             "recovered_data": recovered_data,
             "actions": actions,
@@ -265,7 +119,6 @@ class RemediationAgent:
                 "highest_risk": max(
                     [int(item.get("risk_score") or 0) for item in findings], default=0
                 ),
-                "playbook_steps": len(containment_payload.get("playbook_steps", [])),
             },
         }
 
