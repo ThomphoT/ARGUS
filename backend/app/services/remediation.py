@@ -21,6 +21,60 @@ IP_PATTERN = re.compile(
 )
 
 
+def generate_remediation_payload(
+    company_domain: str,
+    findings: List[Dict[str, Any]],
+    recovered_data: Optional[List[Dict[str, Any]]] = None,
+    attacker: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Build a halt-exfiltration payload for SOAR, firewall, or EDR playbooks."""
+
+    highest_risk = max([int(item.get("risk_score") or 0) for item in findings], default=0)
+    critical_findings = [
+        item
+        for item in findings
+        if int(item.get("risk_score") or 0) >= 70
+        or str(item.get("severity") or "").upper() in {"HIGH", "CRITICAL"}
+    ]
+    indicators = []
+    for finding in critical_findings:
+        evidence = finding.get("evidence") or {}
+        indicators.append(
+            {
+                "title": finding.get("title"),
+                "severity": finding.get("severity"),
+                "risk_score": finding.get("risk_score"),
+                "url": finding.get("url"),
+                "query": evidence.get("query"),
+                "collector": finding.get("collector") or finding.get("type"),
+            }
+        )
+
+    return {
+        "source": "ARGUS",
+        "event": "halt_exfiltration",
+        "playbook": "contain-open-web-exposure",
+        "company_domain": company_domain,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "priority": "critical" if highest_risk >= 90 else "high" if highest_risk >= 70 else "review",
+        "attacker": attacker or {},
+        "actions": [
+            "block_related_network_indicators",
+            "isolate_exposed_assets",
+            "revoke_or_rotate_exposed_credentials",
+            "open_soar_incident",
+            "preserve_evidence_snapshot",
+        ],
+        "indicators": indicators[:25],
+        "recovered_data": (recovered_data or [])[:10],
+        "summary": {
+            "findings_preserved": len(findings),
+            "actionable_findings": len(critical_findings),
+            "highest_risk": highest_risk,
+        },
+    }
+
+
 class RemediationAgent:
     """Stop active collection and invoke an optional real defense playbook."""
 
@@ -82,14 +136,9 @@ class RemediationAgent:
                 "message": "Set DEFENSE_WEBHOOK_URL to connect ARGUS to a SOAR, firewall, or EDR playbook.",
             }
 
-        payload = {
-            "source": "ARGUS",
-            "event": "exfiltration.halt_requested",
-            "company_domain": company_domain,
-            "attacker": attacker,
-            "recovered_data": recovered_data,
-            "findings": findings,
-        }
+        payload = generate_remediation_payload(
+            company_domain, findings, recovered_data, attacker
+        )
         body = json.dumps(payload, sort_keys=True).encode("utf-8")
         headers = {"Content-Type": "application/json"}
         if self.settings.defense_webhook_secret:

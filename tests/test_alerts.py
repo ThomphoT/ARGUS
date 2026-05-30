@@ -61,6 +61,8 @@ async def test_triggerware_alert_sends_threat_detected_event(
     payload = json.loads(request["content"])
     assert payload["source"] == "ARGUS"
     assert payload["event"] == "threat_detected"
+    assert payload["workflow"]["type"] == "autonomous_defense"
+    assert "firewall_block_signal" in payload["workflow"]["simulated_actions"]
     assert payload["finding"]["severity"] == "HIGH"
     assert payload["finding"]["risk_score"] == 80
 

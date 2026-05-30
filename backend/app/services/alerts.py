@@ -8,7 +8,7 @@ from typing import Dict
 import httpx
 
 from backend.app.core.config import Settings
-from backend.app.models import ClassifiedFinding, Severity
+from backend.app.models import ClassifiedFinding
 
 
 class TriggerWareAlerts:
@@ -18,14 +18,28 @@ class TriggerWareAlerts:
         self.settings = settings
 
     async def maybe_alert(self, finding: ClassifiedFinding) -> bool:
-        if finding.severity not in {Severity.CRITICAL, Severity.HIGH}:
+        if finding.risk_score < 70:
             return False
         if not self.settings.triggerware_webhook_url:
             return False
 
+        recommended_action = (
+            finding.recommendations[0]
+            if finding.recommendations
+            else "Review the finding, preserve evidence, and block exposed assets."
+        )
         payload = {
             "source": "ARGUS",
             "event": "threat_detected",
+            "workflow": {
+                "type": "autonomous_defense",
+                "simulated_actions": [
+                    "slack_security_channel_notification",
+                    "firewall_block_signal",
+                    "soar_case_creation",
+                ],
+                "recommended_action": recommended_action,
+            },
             "finding": finding.model_dump(mode="json"),
         }
         body = json.dumps(payload, sort_keys=True).encode("utf-8")
