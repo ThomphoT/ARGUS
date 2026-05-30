@@ -1921,10 +1921,8 @@
       return 'Isolate affected services, enable audit logging, snapshot evidence, and verify no further outbound transfer is occurring.';
     }
 
-    function isHighRiskFinding(data) {
-      const score = Number(data.risk_score || data.score || 0);
-      const level = String(data.risk_level || data.severity || '').toUpperCase();
-      return score >= 70 || level === 'HIGH' || level === 'CRITICAL';
+    function canAuthorizeFinding(data) {
+      return !!data;
     }
 
     function armHumanAuthorization(data) {
@@ -1992,7 +1990,7 @@
             <div id="` + responseId + `">` + responseOverview(data) + `</div>
             <div class="finding-actions">
               <button class="finding-action-btn" type="button" data-target="` + detailId + `">Read more</button>
-              <button class="finding-action-btn danger finding-halt-btn" type="button" data-high-risk="` + (isHighRiskFinding(data) ? 'true' : 'false') + `">Halt exfiltration</button>
+              <button class="finding-action-btn danger finding-halt-btn" type="button">Halt exfiltration</button>
             </div>
             <div class="finding-detail" id="` + detailId + `">` + evidenceSummary(data) + `</div>
           </div>
@@ -2014,7 +2012,7 @@
       feedArea.insertBefore(card, feedArea.firstChild);
       state.findings.push(data);
       findingCount.textContent = '[' + state.findings.length + ' findings]';
-      if (isHighRiskFinding(data)) {
+      if (canAuthorizeFinding(data)) {
         armHumanAuthorization(data);
       }
       updateFindingHaltButtons();
@@ -2031,7 +2029,7 @@
 
     function updateFindingHaltButtons() {
       document.querySelectorAll('.finding-halt-btn').forEach(function(btn) {
-        btn.disabled = state.scanState !== 'scanning' || btn.getAttribute('data-high-risk') !== 'true';
+        btn.disabled = state.scanState !== 'scanning';
       });
     }
 
